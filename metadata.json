@@ -1,0 +1,5 @@
+{
+  "name": "Study Baddie",
+  "description": "An AI-powered study companion that converts documents and images into interactive summaries, flashcards, and chat sessions. Features instant feedback Q&A and a clean, focused UI.",
+  "requestFramePermissions": []
+}
