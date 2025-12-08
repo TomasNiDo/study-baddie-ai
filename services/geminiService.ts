@@ -184,7 +184,8 @@ export const chatWithDocument = async (
   const chat = ai.chats.create({
     model: "gemini-2.5-flash",
     config: {
-      systemInstruction: "You are a helpful study assistant. Answer questions based on the provided document.",
+      // Robust system instruction to prevent persona drift (e.g. staying in "child mode" after an ELI5 prompt)
+      systemInstruction: "You are an intelligent study assistant for university students. You explain concepts clearly and accurately. When asked to simplify, use simple analogies but do not adopt a childish persona. Always return to a professional, academic tone for subsequent questions unless explicitly asked otherwise.",
     },
   });
 

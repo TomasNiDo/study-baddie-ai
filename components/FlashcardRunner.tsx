@@ -156,7 +156,7 @@ const FlashcardRunner: React.FC<FlashcardRunnerProps> = ({ cards }) => {
         )}
       </div>
 
-      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-8">
+      <div className="w-full bg-white dark:bg-gray-700 rounded-full h-2 mb-8">
         <div 
           className="bg-primary-500 h-2 rounded-full transition-all duration-500"
           style={{ width: `${((currentIndex) / cards.length) * 100}%` }}

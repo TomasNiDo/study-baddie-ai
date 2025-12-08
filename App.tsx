@@ -16,7 +16,12 @@ import {
   Download,
   Image as ImageIcon,
   FileIcon,
-  RefreshCw
+  RefreshCw,
+  Search,
+  Zap,
+  CircleHelp,
+  Lightbulb,
+  Brain
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import html2canvas from 'html2canvas';
@@ -24,7 +29,7 @@ import { jsPDF } from 'jspdf';
 import { AppView, TabView, StudySession, Flashcard, ChatMessage } from './types';
 import { generateSummaryAndFlashcards, regenerateSummary } from './services/geminiService';
 import FlashcardRunner from './components/FlashcardRunner';
-import ChatBot from './components/ChatBot';
+import ChatBot, { ChatBotHandle } from './components/ChatBot';
 
 const App: React.FC = () => {
   const [view, setView] = useState<AppView>(AppView.UPLOAD);
@@ -36,7 +41,11 @@ const App: React.FC = () => {
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(true); // Default open on desktop
+  const [selectionMenu, setSelectionMenu] = useState<{ x: number; y: number; text: string } | null>(null);
+  
   const summaryRef = useRef<HTMLDivElement>(null);
+  const chatBotRef = useRef<ChatBotHandle>(null);
   
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -56,12 +65,113 @@ const App: React.FC = () => {
 
   const toggleDarkMode = () => setIsDarkMode(!isDarkMode);
 
-  // Mock Authentication State (as per request for "Clerk", simulating logged in user)
+  // Mock Authentication State
   const [user] = useState({
     name: "Demo Student",
     email: "student@studybaddie.ai",
     avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
   });
+
+  // Memoize markdown components to prevent re-renders breaking text selection
+  const markdownComponents = React.useMemo(() => ({
+    h1: ({node, ...props}: any) => <h1 className="text-3xl font-bold text-indigo-800 dark:text-indigo-300 mb-8 mt-8 leading-[4rem]" {...props} />,
+    h2: ({node, ...props}: any) => <h2 className="text-2xl font-bold text-indigo-700 dark:text-indigo-300 mb-8 mt-8 leading-[4rem]" {...props} />,
+    h3: ({node, ...props}: any) => <h3 className="text-xl font-bold text-indigo-700 dark:text-indigo-300 mb-8 mt-8 leading-[2rem]" {...props} />,
+    p: ({node, ...props}: any) => <p className="mb-8 leading-[2rem] text-slate-700 dark:text-slate-300" {...props} />,
+    ul: ({node, ...props}: any) => <ul className="list-disc pl-6 mb-8 space-y-0 text-slate-700 dark:text-slate-300" {...props} />,
+    ol: ({node, ...props}: any) => <ol className="list-decimal pl-6 mb-8 space-y-0 text-slate-700 dark:text-slate-300" {...props} />,
+    li: ({node, ...props}: any) => <li className="leading-[2rem] pl-2 marker:text-slate-500" {...props} />,
+    strong: ({node, ...props}: any) => <strong className="font-bold text-indigo-950 dark:text-purple-100 bg-lime-400 dark:bg-purple-900/60 px-1 rounded box-decoration-clone" {...props} />,
+    blockquote: ({node, ...props}: any) => <blockquote className="border-l-4 border-slate-400 pl-4 italic mb-8 text-slate-600 dark:text-slate-400" {...props} />,
+  }), []);
+
+  // Handle Text Selection in Notebook
+  useEffect(() => {
+    const handleMouseUp = (e: MouseEvent) => {
+      // Only run if we are in Summary tab
+      if (activeTab !== TabView.SUMMARY) return;
+
+      // Ignore clicks inside the tooltip menu itself to prevent it from closing before action
+      if ((e.target as HTMLElement).closest('.selection-menu-container')) {
+        return;
+      }
+
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed) {
+        setSelectionMenu(null);
+        return;
+      }
+
+      const text = selection.toString().trim();
+      if (!text) {
+        setSelectionMenu(null);
+        return;
+      }
+
+      // Ensure selection is inside the notebook
+      if (summaryRef.current && !summaryRef.current.contains(selection.anchorNode)) {
+         setSelectionMenu(null);
+         return;
+      }
+
+      // Get Coordinates
+      const range = selection.getRangeAt(0);
+      const rect = range.getBoundingClientRect();
+
+      setSelectionMenu({
+        x: rect.left + (rect.width / 2),
+        y: rect.top - 10, // Position slightly above selection
+        text: text
+      });
+    };
+
+    // Close tooltip on scroll to prevent misalignment
+    const handleScroll = () => setSelectionMenu(null);
+
+    document.addEventListener('mouseup', handleMouseUp);
+    window.addEventListener('scroll', handleScroll, true); 
+
+    return () => {
+      document.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [activeTab]);
+
+  const handleTooltipAction = (e: React.MouseEvent, type: 'explain' | 'simplify' | 'quiz' | 'example' | 'mnemonic') => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!selectionMenu || !chatBotRef.current) return;
+    
+    if (!isChatOpen) setIsChatOpen(true);
+
+    let prompt = "";
+    const text = selectionMenu.text;
+
+    // Prompts designed to maintain an academic yet helpful tone
+    switch (type) {
+        case 'explain':
+            prompt = `Explain this text in detail (University level): "${text}"`;
+            break;
+        case 'simplify':
+            // "plain English" instead of "like I'm 5" to avoid childish persona drift
+            prompt = `Explain this highlighted text in plain English using simple analogies (ELI5), but avoid using a childish tone: "${text}"`;
+            break;
+        case 'quiz':
+            prompt = `Ask me a study question based on this text to test my understanding (don't provide the answer yet). Text: "${text}"`;
+            break;
+        case 'example':
+            // Removed request for analogy to ensure concrete examples
+            prompt = `Provide a concrete real-world example that demonstrates this concept (University level): "${text}"`;
+            break;
+        case 'mnemonic':
+            prompt = `Create a catchy mnemonic, acronym, or rhyme to help me memorize the key points in this text: "${text}"`;
+            break;
+    }
+    
+    chatBotRef.current.askQuestion(prompt);
+    setSelectionMenu(null);
+  };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -122,56 +232,47 @@ const App: React.FC = () => {
           setView(AppView.DASHBOARD);
         } catch (err: any) {
           // Default fallback
-          let finalMessage = "An unexpected error occurred while processing the document.";
-          const rawMessage = err instanceof Error ? err.message : String(err);
-          let cleanedMessage = rawMessage;
-
-          // 1. Try to parse JSON error message from the API response
-          try {
-             const jsonStart = rawMessage.indexOf('{');
-             const jsonEnd = rawMessage.lastIndexOf('}');
-             if (jsonStart !== -1 && jsonEnd !== -1) {
-                 const jsonStr = rawMessage.substring(jsonStart, jsonEnd + 1);
-                 const parsed = JSON.parse(jsonStr);
-                 if (parsed.error && parsed.error.message) {
-                     cleanedMessage = parsed.error.message;
-                 }
-             }
-          } catch (e) {
-             // Ignore JSON parsing errors
-          }
-
-          // 2. Map technical errors to human-friendly messages
-          if (cleanedMessage.includes("API key") || cleanedMessage.includes("API_KEY")) {
-              finalMessage = "Authentication Error: The API Key is invalid or missing. Please check your configuration.";
-          } else if (cleanedMessage.includes("safety") || cleanedMessage.includes("blocked")) {
-              finalMessage = "Safety Violation: The content was flagged by AI safety filters and cannot be processed.";
-          } else if (cleanedMessage.includes("overloaded") || cleanedMessage.includes("503")) {
-              finalMessage = "Service Busy: The AI service is currently overloaded. Please try again in a few moments.";
-          } else if (cleanedMessage.includes("fetch failed") || cleanedMessage.includes("Network")) {
-              finalMessage = "Network Error: Could not connect to the AI service. Please check your internet connection.";
-          } else if (cleanedMessage.includes("400")) {
-              finalMessage = "Invalid Request: The file format might be unsupported or corrupted.";
-          } else {
-             // If the message is reasonably short and readable, show it. Otherwise keep the generic one.
-             if (cleanedMessage.length < 200 && !cleanedMessage.includes("{")) {
-                 finalMessage = `Error: ${cleanedMessage}`;
-             }
-          }
-
-          console.error("[Upload Error] AI Processing Failed.");
-          console.error("Technical Reason:", cleanedMessage);
-          console.error("Full Error Details:", err);
+          let finalMessage = "An unexpected error occurred.";
           
+          if (err.message) {
+            // Attempt to parse clean error from JSON if possible
+            try {
+               const rawMsg = err.message;
+               const jsonMatch = rawMsg.match(/\{.*\}/s);
+               if (jsonMatch) {
+                 const errorObj = JSON.parse(jsonMatch[0]);
+                 // Check for specific API errors
+                 if (errorObj.error) {
+                    const status = errorObj.error.status;
+                    const reason = errorObj.error.details?.[0]?.reason;
+                    
+                    if (reason === 'API_KEY_INVALID') {
+                       finalMessage = "Authentication Error: The provided API Key is invalid. Please check your configuration.";
+                    } else if (status === 'RESOURCE_EXHAUSTED') {
+                       finalMessage = "Service Busy: Too many requests. Please wait a moment and try again.";
+                    } else if (errorObj.error.message) {
+                       finalMessage = `AI Service Error: ${errorObj.error.message}`;
+                    }
+                 }
+               } else {
+                 finalMessage = rawMsg; // Use raw message if no JSON found but message exists
+               }
+            } catch (e) {
+               finalMessage = err.message;
+            }
+          }
+          
+          console.error("Full Error Object:", err);
           setError(finalMessage);
         } finally {
           setIsProcessing(false);
         }
       };
+
       reader.readAsDataURL(file);
-    } catch (err: any) {
-      console.error("[Upload Error] Unexpected error initializing upload:", err);
-      setError(`Error initializing upload: ${err.message}`);
+    } catch (err) {
+      console.error("[Upload Error] Unexpected error during upload process:", err);
+      setError("An unexpected error occurred while processing the file.");
       setIsProcessing(false);
     }
   };
@@ -180,445 +281,541 @@ const App: React.FC = () => {
     if (!session) return;
     setIsRegenerating(true);
     try {
-        const newSummary = await regenerateSummary(session.fileData, session.fileType);
-        setSession(prev => prev ? ({ ...prev, summary: newSummary }) : null);
-    } catch (err) {
-        console.error("Failed to regenerate summary", err);
-        // We could add a toast here, but for now console error is enough
+      const newSummary = await regenerateSummary(session.fileData, session.fileType);
+      setSession(prev => prev ? { ...prev, summary: newSummary } : null);
+    } catch (error) {
+      console.error("Failed to regenerate summary", error);
     } finally {
-        setIsRegenerating(false);
+      setIsRegenerating(false);
     }
   };
 
-  const handleLogout = () => {
-    setSession(null);
-    setView(AppView.UPLOAD);
-    // In a real app with Clerk, this would call signOut()
-  };
-
-  const handleExport = async (format: 'png' | 'pdf') => {
-    if (!summaryRef.current || !session) return;
-    
+  const handleExport = async (type: 'png' | 'pdf') => {
+    if (!summaryRef.current) return;
     setIsExporting(true);
     setExportMenuOpen(false);
 
     try {
-      // 1. Wait for custom fonts to load so the handwritten font is captured
+      // Ensure fonts are loaded before capturing
       await document.fonts.ready;
-
-      // 2. Use html2canvas to capture the element
-      const canvas = await html2canvas(summaryRef.current, {
-        scale: 2, // High resolution for better PDF quality
+      
+      const element = summaryRef.current;
+      
+      // Configure html2canvas to capture full scroll height
+      const canvas = await html2canvas(element, {
+        scale: 2, // Retain quality
         useCORS: true,
-        allowTaint: true,
-        backgroundColor: isDarkMode ? '#1e293b' : '#fffdf0', // Match exact CSS paper colors
-        height: summaryRef.current.scrollHeight, // Capture full height even if scrollable
-        windowHeight: summaryRef.current.scrollHeight,
-        scrollY: 0, // Reset scroll to ensure we capture from top
+        logging: false,
+        backgroundColor: isDarkMode ? '#1e293b' : '#fefce8', // Match paper color
+        scrollY: -window.scrollY, // Correct scrolling issue
+        windowHeight: element.scrollHeight + 100, // Ensure full height capture
         onclone: (clonedDoc) => {
-             // Ensure the cloned element is fully expanded
-             const el = clonedDoc.getElementById('summary-content');
-             if (el) {
-                 el.style.height = 'auto';
-                 el.style.overflow = 'visible';
-                 el.style.maxHeight = 'none';
-             }
+            // Force the cloned element to show full content
+            const clonedElement = clonedDoc.getElementById('summary-content');
+            if (clonedElement) {
+                clonedElement.style.height = 'auto';
+                clonedElement.style.overflow = 'visible';
+                clonedElement.style.maxHeight = 'none';
+            }
         }
       });
 
-      if (format === 'png') {
+      if (type === 'png') {
         const link = document.createElement('a');
-        link.download = `${session.title || session.fileName}-notes.png`;
+        link.download = `StudyBaddie-Notes-${Date.now()}.png`;
         link.href = canvas.toDataURL('image/png');
         link.click();
-      } else if (format === 'pdf') {
+      } else {
         const imgData = canvas.toDataURL('image/png');
-        
-        // Initialize PDF (A4 size)
         const pdf = new jsPDF('p', 'mm', 'a4');
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const pdfHeight = pdf.internal.pageSize.getHeight();
-        
         const imgWidth = canvas.width;
         const imgHeight = canvas.height;
-        
-        // Calculate the ratio to fit image width to PDF page width
         const ratio = pdfWidth / imgWidth;
-        const scaledHeight = imgHeight * ratio;
-
-        let heightLeft = scaledHeight;
+        const canvasHeightInPdf = imgHeight * ratio;
+        
         let position = 0;
+        let heightLeft = canvasHeightInPdf;
 
-        // Add first page
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, scaledHeight);
+        // First page
+        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, canvasHeightInPdf);
         heightLeft -= pdfHeight;
 
-        // Loop to add remaining pages if the content is longer than one page
+        // Subsequent pages
         while (heightLeft > 0) {
-          position -= pdfHeight; // Move the drawing position up
-          pdf.addPage();
-          pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, scaledHeight);
-          heightLeft -= pdfHeight;
+            position -= pdfHeight; // Move the image up
+            pdf.addPage();
+            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, canvasHeightInPdf);
+            heightLeft -= pdfHeight;
         }
-
-        pdf.save(`${session.title || session.fileName}-notes.pdf`);
+        
+        pdf.save(`StudyBaddie-Notes-${Date.now()}.pdf`);
       }
     } catch (err) {
-      console.error("Export failed", err);
-      alert("Failed to export notes. Please try again. If the document is extremely long, try exporting as PNG.");
+      console.error("Export failed:", err);
     } finally {
       setIsExporting(false);
     }
   };
 
-  // Render Upload View
   if (view === AppView.UPLOAD) {
     return (
-      <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 relative overflow-hidden transition-colors duration-300">
-        {/* Abstract Background Shapes */}
-        <div className="absolute top-0 left-0 w-full h-full overflow-hidden z-0 pointer-events-none">
-           <div className="absolute -top-[20%] -right-[10%] w-[600px] h-[600px] bg-primary-200/30 dark:bg-primary-900/20 rounded-full blur-3xl"></div>
-           <div className="absolute top-[40%] -left-[10%] w-[500px] h-[500px] bg-indigo-200/30 dark:bg-indigo-900/20 rounded-full blur-3xl"></div>
+      <div className="min-h-screen bg-gradient-to-br from-indigo-500 to-purple-600 dark:from-slate-900 dark:to-slate-950 flex flex-col items-center justify-center p-4 relative overflow-hidden transition-colors duration-500">
+        <button 
+          onClick={toggleDarkMode} 
+          className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white backdrop-blur-sm transition-all"
+        >
+          {isDarkMode ? <Sun className="w-6 h-6" /> : <Moon className="w-6 h-6" />}
+        </button>
+
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <Sparkles className="absolute top-20 left-20 text-white/20 w-12 h-12 animate-pulse" />
+          <Sparkles className="absolute bottom-20 right-20 text-white/20 w-8 h-8 animate-pulse delay-700" />
         </div>
 
-        {/* Navbar */}
-        <nav className="relative z-10 w-full px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <div className="bg-primary-600 p-2 rounded-lg text-white shadow-lg shadow-primary-500/30">
-               <BrainCircuit size={24} />
+        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl p-8 md:p-12 w-full max-w-2xl text-center transform transition-all duration-300 hover:scale-[1.01]">
+          <div className="flex justify-center mb-6">
+            <div className="bg-gradient-to-tr from-primary-500 to-purple-500 p-4 rounded-2xl shadow-lg">
+              <BrainCircuit className="w-16 h-16 text-white" />
             </div>
-            <span className="text-xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">Study Baddie</span>
           </div>
-          <div className="flex items-center gap-4">
-             <button 
-               onClick={toggleDarkMode}
-               className="p-2 rounded-full text-slate-500 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
-             >
-               {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-             </button>
-             <div className="hidden md:flex items-center gap-3 bg-white dark:bg-slate-800 py-1.5 px-3 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm">
-                <img src={user.avatar} alt="User" className="w-6 h-6 rounded-full" />
-                <span className="text-sm font-medium text-slate-600 dark:text-slate-300">{user.email}</span>
-             </div>
-          </div>
-        </nav>
+          
+          <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-primary-600 to-purple-600 dark:from-primary-400 dark:to-purple-400 mb-4">
+            Study Baddie
+          </h1>
+          <p className="text-gray-600 dark:text-gray-300 text-lg mb-10 leading-relaxed">
+            Your ultimate AI study bestie. Upload your lectures, slides, or notes, and let's turn them into 
+            <span className="font-bold text-primary-600 dark:text-primary-400"> aesthetic summaries</span>, 
+            <span className="font-bold text-purple-600 dark:text-purple-400"> flashcards</span>, and 
+            <span className="font-bold text-pink-600 dark:text-pink-400"> interactive chats</span>.
+          </p>
 
-        {/* Hero & Upload */}
-        <main className="relative z-10 flex-1 flex flex-col items-center justify-center p-6 text-center">
-          <div className="max-w-3xl w-full space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
-            <h1 className="text-5xl md:text-6xl font-extrabold text-slate-900 dark:text-slate-50 tracking-tight leading-tight">
-              Turn your notes into <br/>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary-600 to-indigo-600 dark:from-primary-400 dark:to-indigo-400">Active Knowledge</span>
-            </h1>
-            <p className="text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto">
-              Upload lectures, handouts, or diagrams. Our AI will summarize them, create study flashcards, and answer your questions instantly.
-            </p>
-
-            {/* Upload Box */}
-            <div className="mt-12">
-               <div className={`relative group cursor-pointer border-2 border-dashed rounded-2xl p-10 transition-all duration-300 ${isProcessing ? 'border-primary-400 bg-primary-50 dark:bg-primary-900/20' : 'border-slate-300 dark:border-slate-700 hover:border-primary-500 dark:hover:border-primary-400 hover:bg-white dark:hover:bg-slate-800/50 bg-white/50 dark:bg-slate-900/50'}`}>
-                 <input 
-                    type="file" 
-                    onChange={handleFileUpload} 
-                    accept=".jpg,.jpeg,.png,.webp,.pdf" 
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
-                    disabled={isProcessing}
-                 />
-                 
-                 <div className="flex flex-col items-center space-y-4">
-                   {isProcessing ? (
-                     <>
-                        <Loader2 className="w-16 h-16 text-primary-500 animate-spin" />
-                        <h3 className="text-xl font-semibold text-primary-700 dark:text-primary-400">Analyzing Document...</h3>
-                        <p className="text-primary-600 dark:text-primary-300">Generating summary and flashcards</p>
-                     </>
-                   ) : (
-                     <>
-                        <div className="bg-white dark:bg-slate-800 p-4 rounded-full shadow-md group-hover:scale-110 transition-transform">
-                          <Upload className="w-10 h-10 text-primary-600 dark:text-primary-400" />
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Click to upload or drag & drop</h3>
-                          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">PDF, JPG, PNG (Max 10MB)</p>
-                        </div>
-                     </>
-                   )}
-                 </div>
-               </div>
-               {error && (
-                 <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm font-medium animate-in fade-in text-left">
-                   <p className="font-bold">Error:</p>
-                   <p className="break-words">{error}</p>
-                 </div>
-               )}
-            </div>
-            
-            {/* Features Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16 text-left">
-              {[
-                { icon: FileText, title: "Smart Summaries", desc: "Get concise, structured notes from messy documents." },
-                { icon: Layout, title: "Interactive Flashcards", desc: "Test yourself with AI-generated Q&A cards." },
-                { icon: MessageSquare, title: "Chat with Docs", desc: "Ask specific questions to clarify doubts instantly." },
-              ].map((feature, idx) => (
-                <div key={idx} className="bg-white/60 dark:bg-slate-800/60 backdrop-blur-sm p-6 rounded-xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow">
-                  <feature.icon className="w-8 h-8 text-primary-600 dark:text-primary-400 mb-3" />
-                  <h4 className="font-bold text-slate-800 dark:text-slate-100 mb-1">{feature.title}</h4>
-                  <p className="text-sm text-slate-600 dark:text-slate-400">{feature.desc}</p>
+          <div className="relative group">
+            <div className="absolute -inset-1 bg-gradient-to-r from-primary-600 to-purple-600 rounded-xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
+            <label className="relative flex flex-col items-center justify-center w-full h-64 border-3 border-dashed border-gray-300 dark:border-slate-700 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-all cursor-pointer bg-white dark:bg-slate-900">
+              {isProcessing ? (
+                <div className="flex flex-col items-center animate-in fade-in duration-300">
+                  <Loader2 className="w-12 h-12 text-primary-500 animate-spin mb-4" />
+                  <p className="text-gray-600 dark:text-gray-300 font-medium">Analyzing your materials...</p>
+                  <p className="text-gray-400 dark:text-gray-500 text-sm mt-2">This might take a moment, bestie!</p>
                 </div>
-              ))}
-            </div>
+              ) : (
+                <>
+                  <div className="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-full mb-4 group-hover:scale-110 transition-transform duration-300">
+                    <Upload className="w-8 h-8 text-primary-600 dark:text-primary-400" />
+                  </div>
+                  <p className="text-xl font-semibold text-gray-700 dark:text-gray-200">Click to upload or drag & drop</p>
+                  <p className="text-gray-500 dark:text-gray-400 mt-2">PDF, Images (JPG, PNG)</p>
+                </>
+              )}
+              <input 
+                type="file" 
+                className="hidden" 
+                accept=".pdf, .jpg, .jpeg, .png, .webp"
+                onChange={handleFileUpload}
+                disabled={isProcessing}
+              />
+            </label>
           </div>
-        </main>
+
+          {error && (
+            <div className="mt-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-600 dark:text-red-300 text-sm font-medium animate-in slide-in-from-top-2">
+              {error}
+            </div>
+          )}
+          
+          <div className="mt-8 flex justify-center gap-6 text-xs text-gray-400 dark:text-gray-500 font-medium uppercase tracking-widest">
+            <span className="flex items-center gap-1"><Sparkles className="w-3 h-3" /> AI Summaries</span>
+            <span className="flex items-center gap-1"><Sparkles className="w-3 h-3" /> Smart Flashcards</span>
+            <span className="flex items-center gap-1"><Sparkles className="w-3 h-3" /> 24/7 Tutor</span>
+          </div>
+        </div>
       </div>
     );
   }
 
-  // Render Dashboard View
-  if (!session) return null; // Should not happen based on logic
-
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col md:flex-row overflow-hidden transition-colors duration-300">
-      
-      {/* Mobile Header */}
-      <div className="md:hidden bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 p-4 flex justify-between items-center z-50">
-         <div className="flex items-center gap-2 font-bold text-slate-800 dark:text-slate-100">
-            <BrainCircuit className="text-primary-600 dark:text-primary-400" /> Study Baddie
-         </div>
-         <div className="flex gap-2">
-            <button 
-               onClick={toggleDarkMode}
-               className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            >
-               {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-            </button>
-            <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="text-slate-800 dark:text-slate-100">
-              {mobileMenuOpen ? <XIcon /> : <Menu />}
-            </button>
-         </div>
-      </div>
-
-      {/* Sidebar Navigation */}
-      <aside className={`
-        fixed inset-y-0 left-0 z-40 w-64 bg-slate-900 dark:bg-slate-950 text-white transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 border-r border-slate-800
-        ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}
-      `}>
-        <div className="p-6 border-b border-slate-800 flex items-center gap-2">
-          <BrainCircuit className="text-primary-400" />
-          <span className="font-bold text-xl tracking-tight">Study Baddie</span>
-        </div>
-
-        <div className="p-4 space-y-6">
-           <div>
-             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 px-2">Current Session</h3>
-             <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700">
-               <div className="flex items-center gap-3 mb-2">
-                  <div className="p-2 bg-primary-500/20 rounded text-primary-400">
-                    <FileText size={16} />
-                  </div>
-                  <div className="truncate">
-                    <p className="text-sm font-medium text-slate-200 truncate">{session.title || session.fileName}</p>
-                    <p className="text-xs text-slate-500">{new Date(session.createdAt).toLocaleDateString()}</p>
-                  </div>
-               </div>
-             </div>
-           </div>
-
-           <nav className="space-y-1">
-             <button
-                onClick={() => { setActiveTab(TabView.SUMMARY); setMobileMenuOpen(false); }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeTab === TabView.SUMMARY ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
-             >
-                <BookOpen size={18} /> Summary
-             </button>
-             <button
-                onClick={() => { setActiveTab(TabView.FLASHCARDS); setMobileMenuOpen(false); }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeTab === TabView.FLASHCARDS ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
-             >
-                <Layout size={18} /> Flashcards
-             </button>
-             <button
-                onClick={() => { setActiveTab(TabView.CHAT); setMobileMenuOpen(false); }}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${activeTab === TabView.CHAT ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
-             >
-                <MessageSquare size={18} /> Chat Assistant
-             </button>
-           </nav>
-        </div>
-
-        <div className="absolute bottom-0 w-full p-4 border-t border-slate-800">
-          <div className="flex items-center gap-3 px-2 mb-4">
-             <img src={user.avatar} className="w-8 h-8 rounded-full bg-slate-700" alt="User"/>
-             <div className="flex-1 overflow-hidden">
-               <p className="text-sm font-medium text-white truncate">{user.name}</p>
-               <p className="text-xs text-slate-500 truncate">{user.email}</p>
-             </div>
-          </div>
+    <div className="flex h-screen bg-slate-200 dark:bg-slate-950 transition-colors duration-500 overflow-hidden">
+      {/* Tooltip Menu for Text Selection */}
+      {selectionMenu && (
+        <div 
+          className="selection-menu-container absolute z-50 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-white rounded-lg shadow-xl border border-slate-300 dark:border-slate-700 flex items-center p-1 gap-1 animate-in zoom-in-95 duration-200 select-none"
+          style={{ 
+            top: selectionMenu.y, 
+            left: selectionMenu.x, 
+            transform: 'translate(-50%, -100%)' 
+          }}
+        >
           <button 
-            onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition-colors"
+             onMouseDown={(e) => handleTooltipAction(e, 'explain')}
+             className="flex flex-col items-center gap-1 px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md transition-colors group relative"
           >
-            <LogOut size={14} /> Sign Out
+             <MessageSquare className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+             <span className="text-[10px] font-medium">Explain</span>
           </button>
+          
+          <div className="w-px h-6 bg-slate-300 dark:bg-slate-700" />
+
+          <button 
+             onMouseDown={(e) => handleTooltipAction(e, 'simplify')}
+             className="flex flex-col items-center gap-1 px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md transition-colors"
+          >
+             <Zap className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
+             <span className="text-[10px] font-medium">Simplify</span>
+          </button>
+
+          <div className="w-px h-6 bg-slate-300 dark:bg-slate-700" />
+
+           <button 
+             onMouseDown={(e) => handleTooltipAction(e, 'quiz')}
+             className="flex flex-col items-center gap-1 px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md transition-colors"
+          >
+             <CircleHelp className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+             <span className="text-[10px] font-medium">Quiz</span>
+          </button>
+
+          <div className="w-px h-6 bg-slate-300 dark:bg-slate-700" />
+
+          <button 
+             onMouseDown={(e) => handleTooltipAction(e, 'example')}
+             className="flex flex-col items-center gap-1 px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md transition-colors"
+          >
+             <Lightbulb className="w-4 h-4 text-green-600 dark:text-green-400" />
+             <span className="text-[10px] font-medium">Example</span>
+          </button>
+
+           <div className="w-px h-6 bg-slate-300 dark:bg-slate-700" />
+
+          <button 
+             onMouseDown={(e) => handleTooltipAction(e, 'mnemonic')}
+             className="flex flex-col items-center gap-1 px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md transition-colors"
+          >
+             <Brain className="w-4 h-4 text-pink-600 dark:text-pink-400" />
+             <span className="text-[10px] font-medium">Mnemonic</span>
+          </button>
+          
+          {/* Triangle Pointer */}
+          <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1 w-2 h-2 bg-slate-100 dark:bg-slate-800 border-b border-r border-slate-300 dark:border-slate-700 rotate-45"></div>
+        </div>
+      )}
+
+      {/* Sidebar - Desktop */}
+      <aside className="hidden md:flex flex-col w-64 bg-slate-900 text-white border-r border-slate-800 z-20 shadow-xl">
+        <div className="p-6 flex items-center gap-3">
+          <div className="bg-gradient-to-tr from-primary-500 to-purple-500 p-2 rounded-lg">
+            <BrainCircuit className="w-6 h-6 text-white" />
+          </div>
+          <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">Study Baddie</span>
+        </div>
+
+        <div className="px-6 py-2">
+           <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Current Session</div>
+           <div className="bg-slate-800/50 rounded-xl p-3 border border-slate-700/50 flex items-center gap-3">
+              <div className="bg-primary-500/20 p-2 rounded-lg">
+                 <FileText className="w-5 h-5 text-primary-400" />
+              </div>
+              <div className="overflow-hidden">
+                <p className="text-sm font-medium text-slate-200 truncate">{session?.title}</p>
+                <p className="text-xs text-slate-500">{new Date(session?.createdAt || 0).toLocaleDateString()}</p>
+              </div>
+           </div>
+        </div>
+
+        <nav className="flex-1 px-4 py-6 space-y-2">
+          <button
+            onClick={() => setActiveTab(TabView.SUMMARY)}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${
+              activeTab === TabView.SUMMARY
+                ? 'bg-primary-600 text-white shadow-lg shadow-primary-900/20'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <BookOpen className="w-5 h-5" />
+            Summary
+          </button>
+          <button
+            onClick={() => setActiveTab(TabView.FLASHCARDS)}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${
+              activeTab === TabView.FLASHCARDS
+                ? 'bg-primary-600 text-white shadow-lg shadow-primary-900/20'
+                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <Layout className="w-5 h-5" />
+            Flashcards
+          </button>
+          
+          {/* Chat Tab Button only visible on small screens since it's sidebar on large */}
+          <div className="md:hidden">
+             {/* Not needed as we use right sidebar */}
+          </div>
+        </nav>
+        
+        <div className="p-4 border-t border-slate-800">
+           <div className="flex items-center gap-3 px-4 py-2">
+              <div className="w-8 h-8 rounded-full bg-slate-700 overflow-hidden">
+                 <img src={user.avatar} alt="User" className="w-full h-full object-cover" />
+              </div>
+              <div className="flex-1 overflow-hidden">
+                 <p className="text-sm font-medium text-white truncate">{user.name}</p>
+                 <p className="text-xs text-slate-500 truncate">{user.email}</p>
+              </div>
+           </div>
+           <button 
+             onClick={() => {
+               setSession(null);
+               setView(AppView.UPLOAD);
+               setActiveTab(TabView.SUMMARY);
+               setError(null);
+               setIsChatOpen(true);
+             }}
+             className="w-full flex items-center justify-center gap-2 mt-4 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 text-xs font-medium transition-colors border border-slate-700"
+           >
+             <LogOut className="w-3 h-3" /> Sign Out
+           </button>
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-[calc(100vh-60px)] md:h-screen overflow-hidden">
-         {/* Top Bar (Desktop) */}
-         <header className="hidden md:flex h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 px-8 items-center justify-between z-20">
-            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-              {activeTab === TabView.SUMMARY && <><BookOpen className="text-primary-500" /> Document Summary</>}
-              {activeTab === TabView.FLASHCARDS && <><Layout className="text-primary-500" /> Study Flashcards</>}
-              {activeTab === TabView.CHAT && <><Sparkles className="text-primary-500" /> AI Assistant</>}
-            </h2>
-            <div className="flex items-center gap-4">
-               {activeTab === TabView.SUMMARY && (
-                  <div className="relative flex items-center gap-2">
-                     <button
-                        onClick={handleRegenerateSummary}
-                        disabled={isRegenerating || isExporting}
-                        className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 text-sm font-medium text-indigo-700 dark:text-indigo-300 transition-colors border border-indigo-200 dark:border-indigo-800"
-                    >
-                        {isRegenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                        Regenerate
-                    </button>
-                     <div className="relative">
-                        <button
-                            onClick={() => setExportMenuOpen(!exportMenuOpen)}
-                            disabled={isExporting}
-                            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-sm font-medium text-gray-700 dark:text-gray-200 transition-colors"
-                        >
-                            {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                            Export Notes
-                        </button>
-                        
-                        {exportMenuOpen && (
-                            <div className="absolute top-full right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-200 dark:border-slate-700 py-1 z-50 animate-in fade-in zoom-in-95 duration-200">
-                            <button 
-                                onClick={() => handleExport('png')}
-                                className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 text-gray-700 dark:text-gray-200"
-                            >
-                                <ImageIcon className="w-4 h-4 text-primary-500" /> Download Image (PNG)
-                            </button>
-                            <button 
-                                onClick={() => handleExport('pdf')}
-                                className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-700 flex items-center gap-2 text-gray-700 dark:text-gray-200"
-                            >
-                                <FileIcon className="w-4 h-4 text-red-500" /> Download PDF
-                            </button>
-                            </div>
-                        )}
-                        
-                        {/* Overlay to close menu */}
-                        {exportMenuOpen && (
-                            <div className="fixed inset-0 z-40" onClick={() => setExportMenuOpen(false)} />
-                        )}
-                     </div>
-                  </div>
-               )}
-               <button 
-                  onClick={toggleDarkMode}
-                  className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-               >
-                  {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-               </button>
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col h-full relative overflow-hidden">
+        {/* Header */}
+        <header className="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-4 sm:px-6 flex-none z-40 shadow-sm">
+          <div className="flex items-center gap-4">
+            <button 
+              className="md:hidden p-2 -ml-2 text-gray-600 dark:text-gray-300"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+            <div className="flex items-center gap-2">
+               {activeTab === TabView.SUMMARY && <BookOpen className="w-5 h-5 text-primary-600 dark:text-primary-400" />}
+               {activeTab === TabView.FLASHCARDS && <Layout className="w-5 h-5 text-primary-600 dark:text-primary-400" />}
+               <h2 className="text-lg font-bold text-gray-800 dark:text-white">
+                 {activeTab === TabView.SUMMARY ? 'Document Summary' : 'Study Flashcards'}
+               </h2>
             </div>
-         </header>
+          </div>
+          
+          <div className="flex items-center gap-3">
+             {activeTab === TabView.SUMMARY && (
+               <>
+                 <button
+                   onClick={handleRegenerateSummary}
+                   disabled={isRegenerating}
+                   className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-md text-sm font-medium hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors disabled:opacity-50 border border-indigo-200 dark:border-indigo-800"
+                 >
+                   <RefreshCw className={`w-4 h-4 ${isRegenerating ? 'animate-spin' : ''}`} />
+                   {isRegenerating ? 'Regenerating...' : 'Regenerate'}
+                 </button>
 
-         <div className="flex-1 overflow-hidden p-0 md:p-6 bg-gray-100 dark:bg-slate-950">
-           {/* Summary Tab */}
-           {activeTab === TabView.SUMMARY && (
-             <div className="h-full w-full overflow-y-auto p-4 md:p-8 custom-scrollbar relative z-0">
-               <div 
-                 ref={summaryRef}
-                 id="summary-content"
-                 className={`
-                   mx-auto
-                   w-full max-w-4xl min-h-[95%] shadow-2xl 
-                   bg-[#fffdf0] dark:bg-[#1e293b] 
-                   text-xl
-                   text-slate-800 dark:text-slate-200
-                   relative
-                   rounded-sm
-                   transition-colors duration-300
-                   pb-20
-                 `}
-                 style={{
-                     fontFamily: '"Patrick Hand", cursive',
-                     lineHeight: '2rem',
-                     // Stacked backgrounds: Holes (Top), Margin (Middle), Lines (Bottom)
-                     backgroundImage: `
-                       radial-gradient(circle, ${isDarkMode ? '#020617' : '#f3f4f6'} 30%, transparent 31%),
-                       linear-gradient(90deg, transparent 3rem, ${isDarkMode ? '#ef444433' : '#fca5a5'} 3rem, ${isDarkMode ? '#ef444433' : '#fca5a5'} 3.1rem, transparent 3.1rem),
-                       linear-gradient(${isDarkMode ? '#334155' : '#e5e7eb'} 1px, transparent 1px)
-                     `,
-                     backgroundSize: '2rem 2rem, 100% 2rem, 100% 2rem',
-                     backgroundPosition: '0.5rem 1rem, 0 0, 0 2rem', // Holes slightly indented, Lines start after header area
-                     backgroundRepeat: 'repeat-y, repeat, repeat'
-                 }}
-               >
-                   {/* Regeneration Overlay */}
-                   {isRegenerating && (
-                       <div className="absolute inset-0 z-10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm rounded-sm">
-                           <div className="sticky top-[45vh] -translate-y-1/2 flex flex-col items-center justify-center">
-                               <Loader2 className="w-12 h-12 text-primary-600 animate-spin mb-4" />
-                               <p className="text-xl font-bold text-primary-700 dark:text-primary-300">Regenerating Summary...</p>
-                           </div>
-                       </div>
-                   )}
-
-                   {/* Content */}
-                   <div className={`p-8 pl-16 pt-8 ${isRegenerating ? 'opacity-50' : ''}`}>
-                       <h1 className="text-4xl font-bold mb-8 text-indigo-600 dark:text-indigo-400 leading-[4rem]">
-                           {session.title || session.fileName}
-                       </h1>
-                       
-                       <ReactMarkdown
-                         components={{
-                           h1: ({node, ...props}) => <h1 className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mb-8 mt-8 leading-[4rem]" {...props} />,
-                           h2: ({node, ...props}) => <h2 className="text-2xl font-bold text-indigo-500 dark:text-indigo-300 mb-8 mt-8 leading-[4rem]" {...props} />,
-                           h3: ({node, ...props}) => <h3 className="text-xl font-bold text-indigo-500 dark:text-indigo-300 mb-8 mt-8 leading-[2rem]" {...props} />,
-                           p: ({node, ...props}) => <p className="mb-8 leading-[2rem]" {...props} />,
-                           ul: ({node, ...props}) => <ul className="list-disc pl-6 mb-8 space-y-0" {...props} />,
-                           ol: ({node, ...props}) => <ol className="list-decimal pl-6 mb-8 space-y-0" {...props} />,
-                           li: ({node, ...props}) => <li className="leading-[2rem] pl-2 marker:text-indigo-400" {...props} />,
-                           strong: ({node, ...props}) => <strong className="font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/30 px-1 rounded" {...props} />,
-                           blockquote: ({node, ...props}) => <blockquote className="border-l-4 border-indigo-300 pl-4 italic mb-8" {...props} />,
-                         }}
+                 <div className="relative">
+                   <button
+                     onClick={() => setExportMenuOpen(!exportMenuOpen)}
+                     disabled={isExporting}
+                     className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 rounded-md text-sm font-medium hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                   >
+                     {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                     Export Notes
+                   </button>
+                   
+                   {exportMenuOpen && (
+                     <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-200 dark:border-slate-700 py-1 z-50 animate-in slide-in-from-top-2">
+                       <button
+                         onClick={() => handleExport('pdf')}
+                         className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
                        >
-                         {session.summary}
-                       </ReactMarkdown>
-                   </div>
-               </div>
-             </div>
-           )}
+                         <FileIcon className="w-4 h-4 text-red-500" /> Save as PDF
+                       </button>
+                       <button
+                         onClick={() => handleExport('png')}
+                         className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                       >
+                         <ImageIcon className="w-4 h-4 text-blue-500" /> Save as Image
+                       </button>
+                     </div>
+                   )}
+                 </div>
+               </>
+             )}
 
-            {/* Flashcards Tab Container - wrapped to match structure */}
-            {activeTab === TabView.FLASHCARDS && (
-              <div className="h-full w-full max-w-6xl mx-auto bg-gray-50 dark:bg-slate-950 md:rounded-2xl overflow-hidden relative transition-colors duration-300 flex flex-col">
-                 <FlashcardRunner cards={session.flashcards} />
+             <button 
+              onClick={toggleDarkMode} 
+              className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+            >
+              {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
+          </div>
+        </header>
+
+        {/* Content Area */}
+        <div className="flex-1 overflow-hidden relative flex">
+          
+          {/* Main View */}
+          <div className="flex-1 overflow-y-auto relative scroll-smooth bg-slate-200 dark:bg-slate-950 transition-colors duration-500">
+            {activeTab === TabView.SUMMARY ? (
+              <div className="min-h-full p-4 md:p-8 flex justify-center">
+                 {/* Paper / Notebook Design */}
+                 <div 
+                   id="summary-content"
+                   ref={summaryRef} 
+                   className="relative w-full max-w-4xl bg-[#fefce8] dark:bg-[#1e293b] shadow-2xl min-h-[1200px] font-hand text-lg md:text-xl transition-colors duration-500 pb-20"
+                   style={{
+                     // Paper Lines Pattern
+                     backgroundImage: `
+                       linear-gradient(90deg, transparent 79px, #ab47bc 79px, #ab47bc 81px, transparent 81px),
+                       linear-gradient(to bottom, transparent 31px, ${isDarkMode ? '#334155' : '#e2e8f0'} 31px)
+                     `,
+                     backgroundSize: '100% 32px',
+                     backgroundAttachment: 'local' // Important for scrolling to work right with gradient
+                   }}
+                 >
+                    {/* Binder Holes - Using CSS Radial Gradient for infinite repeat */}
+                    <div 
+                        className="absolute top-0 left-0 bottom-0 w-20 z-10"
+                        style={{
+                            backgroundImage: `radial-gradient(circle at 10px center, ${isDarkMode ? '#020617' : '#e2e8f0'} 6px, transparent 7px)`,
+                            backgroundSize: '20px 32px', // Matches line height
+                            backgroundPosition: '10px 16px', // Center vertically on line
+                            backgroundRepeat: 'repeat-y'
+                        }}
+                    ></div>
+
+                    {/* Content Container */}
+                    <div className="pl-24 pr-8 pt-8 md:pl-28 md:pr-12">
+                       {/* Header Title on Paper */}
+                       <div className="border-b-2 border-slate-300 dark:border-slate-600 pb-2 mb-4">
+                           <h1 className="text-4xl font-bold text-indigo-600 dark:text-indigo-400 mb-0 leading-[3rem]">
+                               {session?.title}
+                           </h1>
+                       </div>
+                       
+                       {/* Markdown Content */}
+                       <div className="relative z-0">
+                         {session && (
+                           <ReactMarkdown 
+                              components={markdownComponents}
+                           >
+                             {session.summary}
+                           </ReactMarkdown>
+                         )}
+                       </div>
+                    </div>
+
+                    {/* Regenerating Overlay */}
+                    {isRegenerating && (
+                      <div className="absolute inset-0 bg-white/60 dark:bg-slate-950/60 backdrop-blur-[2px] z-20 transition-all duration-300">
+                         <div className="sticky top-[45vh] flex flex-col items-center">
+                            <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl shadow-xl border border-gray-100 dark:border-slate-700 flex items-center gap-3 animate-in zoom-in">
+                               <RefreshCw className="w-6 h-6 text-primary-500 animate-spin" />
+                               <span className="font-bold text-gray-700 dark:text-white">Regenerating Notes...</span>
+                            </div>
+                         </div>
+                      </div>
+                    )}
+                 </div>
+              </div>
+            ) : (
+              <div className="h-full p-4 md:p-8 bg-slate-200 dark:bg-slate-950">
+                {session && <FlashcardRunner cards={session.flashcards} />}
               </div>
             )}
+          </div>
 
-            {/* Chat Tab Container */}
-            {activeTab === TabView.CHAT && (
-               <div className="h-full w-full max-w-6xl mx-auto bg-white dark:bg-slate-900 md:rounded-2xl md:shadow-sm md:border border-gray-200 dark:border-slate-800 overflow-hidden relative transition-colors duration-300">
-                 <ChatBot 
-                    history={session.chatHistory} 
-                    setHistory={(updater) => {
-                      if (typeof updater === 'function') {
-                        setSession(prev => prev ? ({ ...prev, chatHistory: updater(prev.chatHistory) }) : null);
-                      } else {
-                        setSession(prev => prev ? ({ ...prev, chatHistory: updater }) : null);
-                      }
-                    }}
-                    fileData={session.fileData}
-                    fileType={session.fileType}
-                 />
-               </div>
-            )}
-         </div>
+          {/* Right Sidebar - Chat Assistant */}
+          {activeTab === TabView.SUMMARY && (
+             <div 
+               className={`
+                 fixed inset-y-0 right-0 w-full sm:w-96 bg-white dark:bg-slate-900 shadow-2xl transform transition-transform duration-300 ease-in-out z-30 border-l border-gray-200 dark:border-slate-800
+                 ${isChatOpen ? 'translate-x-0' : 'translate-x-full'}
+                 md:relative md:translate-x-0 md:w-96 md:flex-none
+               `}
+             >
+                <div className="h-full flex flex-col">
+                   <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-slate-800 md:hidden">
+                      <h3 className="font-bold text-gray-700 dark:text-white flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-primary-500" /> AI Assistant
+                      </h3>
+                      <button onClick={() => setIsChatOpen(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full">
+                         <XIcon className="w-5 h-5 text-gray-500" />
+                      </button>
+                   </div>
+                   
+                   {session && (
+                     <ChatBot 
+                       ref={chatBotRef}
+                       history={session.chatHistory} 
+                       setHistory={(newHistory) => {
+                          // Update session state locally as well
+                          if (typeof newHistory === 'function') {
+                             setSession(prev => prev ? { ...prev, chatHistory: newHistory(prev.chatHistory) } : null);
+                          } else {
+                             setSession(prev => prev ? { ...prev, chatHistory: newHistory } : null);
+                          }
+                       }}
+                       fileData={session.fileData} 
+                       fileType={session.fileType}
+                     />
+                   )}
+                </div>
+             </div>
+          )}
+
+          {/* Mobile Chat Toggle Button */}
+          {activeTab === TabView.SUMMARY && !isChatOpen && (
+             <button
+               onClick={() => setIsChatOpen(true)}
+               className="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-primary-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-primary-700 hover:scale-105 transition-all z-40"
+             >
+                <MessageSquare className="w-6 h-6" />
+             </button>
+          )}
+
+        </div>
       </main>
+
+      {/* Mobile Menu Overlay */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 md:hidden" onClick={() => setMobileMenuOpen(false)}>
+          <div className="absolute left-0 top-0 bottom-0 w-64 bg-slate-900 text-white p-4 shadow-xl" onClick={e => e.stopPropagation()}>
+             {/* Same Sidebar Content for Mobile */}
+             <div className="flex items-center gap-3 mb-8">
+                <div className="bg-primary-500 p-2 rounded-lg">
+                  <BrainCircuit className="w-6 h-6 text-white" />
+                </div>
+                <span className="text-xl font-bold">Study Baddie</span>
+             </div>
+             
+             <nav className="space-y-2">
+                <button
+                  onClick={() => { setActiveTab(TabView.SUMMARY); setMobileMenuOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl ${activeTab === TabView.SUMMARY ? 'bg-primary-600' : 'text-slate-400'}`}
+                >
+                  <BookOpen className="w-5 h-5" /> Summary
+                </button>
+                <button
+                  onClick={() => { setActiveTab(TabView.FLASHCARDS); setMobileMenuOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl ${activeTab === TabView.FLASHCARDS ? 'bg-primary-600' : 'text-slate-400'}`}
+                >
+                  <Layout className="w-5 h-5" /> Flashcards
+                </button>
+             </nav>
+             
+             <div className="absolute bottom-8 left-4 right-4">
+                <button 
+                   onClick={() => {
+                     setSession(null);
+                     setView(AppView.UPLOAD);
+                     setMobileMenuOpen(false);
+                   }}
+                   className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-slate-800 rounded-lg text-slate-300"
+                >
+                   <LogOut className="w-4 h-4" /> Sign Out
+                </button>
+             </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

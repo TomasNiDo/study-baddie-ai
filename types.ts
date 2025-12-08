@@ -31,5 +31,4 @@ export enum AppView {
 export enum TabView {
   SUMMARY = 'SUMMARY',
   FLASHCARDS = 'FLASHCARDS',
-  CHAT = 'CHAT',
 }
