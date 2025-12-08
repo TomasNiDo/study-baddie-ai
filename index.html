@@ -11,20 +11,24 @@
         theme: {
           extend: {
             colors: {
+              // Replacing primary blue with neutral Zinc for B&W aesthetic
               primary: {
-                50: '#f0f9ff',
-                100: '#e0f2fe',
-                200: '#bae6fd',
-                300: '#7dd3fc',
-                400: '#38bdf8',
-                500: '#0ea5e9',
-                600: '#0284c7',
-                700: '#0369a1',
-                800: '#075985',
-                900: '#0c4a6e',
+                50: '#fafafa',
+                100: '#f4f4f5',
+                200: '#e4e4e7',
+                300: '#d4d4d8',
+                400: '#a1a1aa',
+                500: '#71717a',
+                600: '#52525b',
+                700: '#3f3f46',
+                800: '#27272a',
+                900: '#18181b',
+                950: '#09090b',
               },
             },
             fontFamily: {
+              sans: ['"Inter"', 'sans-serif'],
+              serif: ['"Newsreader"', 'serif'],
               hand: ['"Kalam"', 'cursive'],
             },
             animation: {
@@ -58,6 +62,38 @@
           -ms-overflow-style: none;
           scrollbar-width: none;
       }
+
+      /* Light/Minimal scrollbar styling */
+      .light-scrollbar::-webkit-scrollbar,
+      .custom-scrollbar::-webkit-scrollbar {
+          width: 12px;
+          height: 12px;
+      }
+      .light-scrollbar::-webkit-scrollbar-track,
+      .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+      }
+      .light-scrollbar::-webkit-scrollbar-thumb,
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: #e4e4e7; /* zinc-200 */
+          border: 4px solid transparent;
+          background-clip: content-box;
+          border-radius: 99px;
+      }
+      .light-scrollbar::-webkit-scrollbar-thumb:hover,
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background-color: #d4d4d8; /* zinc-300 */
+      }
+      
+      /* Dark mode overrides */
+      .dark .light-scrollbar::-webkit-scrollbar-thumb,
+      .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: #27272a; /* zinc-800 */
+      }
+      .dark .light-scrollbar::-webkit-scrollbar-thumb:hover,
+      .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background-color: #3f3f46; /* zinc-700 */
+      }
     </style>
   <script type="importmap">
 {
@@ -73,9 +109,9 @@
   }
 }
 </script>
-<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&family=Inter:wght@300;400;500;600&family=Newsreader:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 </head>
-  <body class="bg-gray-50 text-gray-900 font-sans antialiased h-screen overflow-hidden dark:bg-slate-950 dark:text-gray-100">
+  <body class="bg-zinc-50 text-zinc-900 font-sans antialiased h-screen overflow-hidden dark:bg-zinc-950 dark:text-zinc-100">
     <div id="root" class="h-full"></div>
   </body>
 </html>

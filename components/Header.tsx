@@ -28,32 +28,32 @@ const Header: React.FC<HeaderProps> = ({
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
 
   return (
-    <header className="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-4 sm:px-6 flex-none z-40 shadow-sm">
+    <header className="h-16 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between px-4 sm:px-6 flex-none z-40">
       <div className="flex items-center gap-4">
         <button 
-          className="md:hidden p-2 -ml-2 text-gray-600 dark:text-gray-300"
+          className="md:hidden p-2 -ml-2 text-zinc-600 dark:text-zinc-300"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
         >
-          <Menu className="w-6 h-6" />
+          <Menu className="w-5 h-5" />
         </button>
         <div className="flex items-center gap-2">
-           {activeTab === TabView.SUMMARY && <BookOpen className="w-5 h-5 text-primary-600 dark:text-primary-400" />}
-           {activeTab === TabView.FLASHCARDS && <Layout className="w-5 h-5 text-primary-600 dark:text-primary-400" />}
-           <h2 className="text-lg font-bold text-gray-800 dark:text-white">
+           {activeTab === TabView.SUMMARY && <BookOpen className="w-4 h-4 text-zinc-500" />}
+           {activeTab === TabView.FLASHCARDS && <Layout className="w-4 h-4 text-zinc-500" />}
+           <h2 className="text-sm font-semibold text-zinc-900 dark:text-white uppercase tracking-wide">
              {activeTab === TabView.SUMMARY ? 'Document Summary' : 'Study Flashcards'}
            </h2>
         </div>
       </div>
       
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
          {activeTab === TabView.SUMMARY && (
            <>
              <button
                onClick={onRegenerate}
                disabled={isRegenerating}
-               className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-md text-sm font-medium hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors disabled:opacity-50 border border-indigo-200 dark:border-indigo-800"
+               className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 rounded-md text-xs font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50 border border-zinc-200 dark:border-zinc-800"
              >
-               <RefreshCw className={`w-4 h-4 ${isRegenerating ? 'animate-spin' : ''}`} />
+               <RefreshCw className={`w-3.5 h-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
                {isRegenerating ? 'Regenerating...' : 'Regenerate'}
              </button>
 
@@ -61,25 +61,25 @@ const Header: React.FC<HeaderProps> = ({
                <button
                  onClick={() => setExportMenuOpen(!exportMenuOpen)}
                  disabled={isExporting}
-                 className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 rounded-md text-sm font-medium hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                 className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-md text-xs font-medium hover:bg-zinc-800 dark:hover:bg-zinc-100 transition-colors disabled:opacity-50 shadow-sm"
                >
-                 {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                 Export Notes
+                 {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                 Export
                </button>
                
                {exportMenuOpen && (
-                 <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-gray-200 dark:border-slate-700 py-1 z-50 animate-in slide-in-from-top-2">
+                 <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-zinc-900 rounded-lg shadow-lg border border-zinc-200 dark:border-zinc-800 py-1 z-50 animate-in slide-in-from-top-2">
                    <button
                      onClick={() => { onExport('pdf'); setExportMenuOpen(false); }}
-                     className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                     className="flex items-center gap-3 w-full px-4 py-2.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
                    >
-                     <FileIcon className="w-4 h-4 text-red-500" /> Save as PDF
+                     <FileIcon className="w-4 h-4 text-zinc-500" /> Save as PDF
                    </button>
                    <button
                      onClick={() => { onExport('png'); setExportMenuOpen(false); }}
-                     className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors"
+                     className="flex items-center gap-3 w-full px-4 py-2.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
                    >
-                     <ImageIcon className="w-4 h-4 text-blue-500" /> Save as Image
+                     <ImageIcon className="w-4 h-4 text-zinc-500" /> Save as Image
                    </button>
                  </div>
                )}
@@ -87,11 +87,13 @@ const Header: React.FC<HeaderProps> = ({
            </>
          )}
 
+         <div className="w-px h-6 bg-zinc-200 dark:bg-zinc-800 mx-2"></div>
+
          <button 
           onClick={toggleDarkMode} 
-          className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+          className="p-2 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors"
         >
-          {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
       </div>
     </header>

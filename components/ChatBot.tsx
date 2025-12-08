@@ -62,15 +62,15 @@ const ChatBot = forwardRef<ChatBotHandle, ChatBotProps>(({ history, setHistory, 
   }));
 
   return (
-    <div className={`flex flex-col h-full bg-white dark:bg-slate-900 shadow-sm border-l border-gray-200 dark:border-slate-800 overflow-hidden transition-colors duration-300 ${isMobile ? 'border-l-0' : ''}`}>
+    <div className={`flex flex-col h-full bg-white dark:bg-zinc-950 shadow-sm border-l border-gray-200 dark:border-zinc-800 overflow-hidden transition-colors duration-300 ${isMobile ? 'border-l-0' : ''}`}>
       {/* Header if needed, but App usually handles it. Adding small header for context if standalone */}
-      <div className="p-3 border-b border-gray-100 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-900 flex items-center gap-2">
+      <div className="p-3 border-b border-gray-100 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-950 flex items-center gap-2">
          <Bot className="w-4 h-4 text-primary-500" />
          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">AI Assistant</span>
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/30 dark:bg-slate-950/30 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50/30 dark:bg-zinc-950 custom-scrollbar">
         {history.length === 0 && (
           <div className="text-center text-gray-400 dark:text-gray-500 mt-10 animate-in fade-in zoom-in duration-500">
             <Bot className="w-12 h-12 mx-auto mb-3 opacity-50" />
@@ -86,7 +86,7 @@ const ChatBot = forwardRef<ChatBotHandle, ChatBotProps>(({ history, setHistory, 
               className={`flex max-w-[90%] rounded-2xl px-3 py-2 text-sm ${
                 msg.role === 'user'
                   ? 'bg-primary-600 text-white rounded-tr-none'
-                  : 'bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-800 dark:text-gray-100 rounded-tl-none shadow-sm'
+                  : 'bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 text-gray-800 dark:text-gray-100 rounded-tl-none shadow-sm'
               }`}
             >
                <div className="w-full overflow-hidden">
@@ -104,7 +104,7 @@ const ChatBot = forwardRef<ChatBotHandle, ChatBotProps>(({ history, setHistory, 
                          code: ({node, inline, className, children, ...props}: any) => {
                            const match = /language-(\w+)/.exec(className || '');
                            return !inline ? (
-                             <div className="my-2 rounded-md overflow-hidden bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-700">
+                             <div className="my-2 rounded-md overflow-hidden bg-slate-100 dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800">
                                 <pre className="p-2 overflow-x-auto text-xs font-mono scrollbar-hide">
                                    <code className={className} {...props}>
                                      {children}
@@ -112,7 +112,7 @@ const ChatBot = forwardRef<ChatBotHandle, ChatBotProps>(({ history, setHistory, 
                                 </pre>
                              </div>
                            ) : (
-                             <code className="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded font-mono text-xs border border-slate-200 dark:border-slate-600 text-pink-600 dark:text-pink-400" {...props}>
+                             <code className="bg-slate-100 dark:bg-zinc-800 px-1 py-0.5 rounded font-mono text-xs border border-slate-200 dark:border-zinc-700 text-pink-600 dark:text-pink-400" {...props}>
                                {children}
                              </code>
                            )
@@ -131,7 +131,7 @@ const ChatBot = forwardRef<ChatBotHandle, ChatBotProps>(({ history, setHistory, 
         ))}
         {isLoading && (
           <div className="flex justify-start w-full">
-            <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl rounded-tl-none px-3 py-2 shadow-sm flex items-center gap-2">
+            <div className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl rounded-tl-none px-3 py-2 shadow-sm flex items-center gap-2">
               <Loader2 className="w-3 h-3 animate-spin text-primary-500" />
               <span className="text-xs text-gray-500 dark:text-gray-400">Thinking...</span>
             </div>
@@ -141,7 +141,7 @@ const ChatBot = forwardRef<ChatBotHandle, ChatBotProps>(({ history, setHistory, 
       </div>
 
       {/* Input Area */}
-      <div className="p-3 bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-slate-800">
+      <div className="p-3 bg-white dark:bg-zinc-950 border-t border-gray-100 dark:border-zinc-800">
         <div className="flex gap-2">
           <input
             type="text"
@@ -149,7 +149,7 @@ const ChatBot = forwardRef<ChatBotHandle, ChatBotProps>(({ history, setHistory, 
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder="Ask a question..."
-            className="flex-1 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-800 dark:text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-sm"
+            className="flex-1 border border-gray-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-gray-800 dark:text-white rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-sm"
             disabled={isLoading}
           />
           <button

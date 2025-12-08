@@ -22,18 +22,15 @@ const FlashcardRunner: React.FC<FlashcardRunnerProps> = ({ cards }) => {
   const currentCard = cards[currentIndex];
 
   useEffect(() => {
-    // Reset state when card changes
     if (!isTransitioning) {
       setIsFlipped(false);
       setUserAnswer('');
       setFeedback('idle');
     }
 
-    // Shuffle options for MC mode if they exist
     if (currentCard?.options) {
       setShuffledOptions([...currentCard.options].sort(() => Math.random() - 0.5));
     } else if (currentCard) {
-        // Fallback if no options exist
         setShuffledOptions([currentCard.answer]);
     }
   }, [currentIndex, currentCard, isTransitioning]);
@@ -45,7 +42,6 @@ const FlashcardRunner: React.FC<FlashcardRunnerProps> = ({ cards }) => {
     const input = answerOverride || userAnswer;
     if (!input.trim()) return;
 
-    // Update state if override provided (MC mode) so we track what was clicked
     if (answerOverride) {
       setUserAnswer(answerOverride);
     }
@@ -58,7 +54,6 @@ const FlashcardRunner: React.FC<FlashcardRunnerProps> = ({ cards }) => {
     if (isCorrect) {
       setFeedback('correct');
       setScore(s => s + 1);
-      // Auto advance after short delay
       setTimeout(() => {
         handleNext();
       }, 1000);
@@ -72,21 +67,14 @@ const FlashcardRunner: React.FC<FlashcardRunnerProps> = ({ cards }) => {
     if (isTransitioning) return;
 
     if (currentIndex < cards.length - 1) {
-      // If the card is currently flipped (showing answer), we want to animate it closing 
-      // BEFORE we switch the content to the next card. This prevents the user from 
-      // seeing the *next* answer on the back of the card while it rotates.
       if (isFlipped) {
         setIsTransitioning(true);
-        setIsFlipped(false); // Start rotating back to front
-        
-        // Wait for half the transition (or enough for the back to be hidden)
+        setIsFlipped(false); 
         setTimeout(() => {
           setCurrentIndex(prev => prev + 1);
           setIsTransitioning(false);
-          // Note: The useEffect will fire here to reset answer/feedback
-        }, 600); // Matches or slightly less than duration-700 to feel snappy
+        }, 600);
       } else {
-        // If not flipped, just switch immediately (or could add slide effect later)
         setCurrentIndex(prev => prev + 1);
       }
     } else {
@@ -107,82 +95,76 @@ const FlashcardRunner: React.FC<FlashcardRunnerProps> = ({ cards }) => {
   if (completed) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 text-center animate-in fade-in zoom-in duration-300">
-        <div className="bg-yellow-100 dark:bg-yellow-900/30 p-6 rounded-full mb-6">
-          <Trophy className="w-12 h-12 text-yellow-600 dark:text-yellow-500" />
+        <div className="bg-zinc-100 dark:bg-zinc-800 p-6 rounded-full mb-6 border border-zinc-200 dark:border-zinc-700">
+          <Trophy className="w-12 h-12 text-zinc-900 dark:text-white" />
         </div>
-        <h2 className="text-3xl font-bold text-gray-800 dark:text-gray-100 mb-2">Session Complete!</h2>
-        <p className="text-gray-600 dark:text-gray-400 mb-8">You scored {score} out of {cards.length}</p>
+        <h2 className="text-3xl font-serif font-bold text-zinc-900 dark:text-white mb-2">Session Complete</h2>
+        <p className="text-zinc-500 dark:text-zinc-400 mb-8 font-mono text-sm">SCORE: {score} / {cards.length}</p>
         <button
           onClick={restart}
-          className="flex items-center gap-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium"
+          className="flex items-center gap-2 px-6 py-3 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-lg hover:opacity-90 transition-opacity font-medium"
         >
-          <RefreshCw className="w-5 h-5" />
+          <RefreshCw className="w-4 h-4" />
           Study Again
         </button>
       </div>
     );
   }
 
-  // Determines if the app has options available to show the choice mode
   const hasOptions = currentCard.options && currentCard.options.length > 1;
 
   return (
-    <div className="flex flex-col h-full max-w-3xl mx-auto w-full p-4">
-      {/* Header with Mode Toggle */}
-      <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
-        <div className="text-sm text-gray-500 dark:text-gray-400 font-medium">
-            <span>Card {currentIndex + 1} of {cards.length}</span>
-            <span className="mx-2">•</span>
+    <div className="flex flex-col h-full max-w-3xl mx-auto w-full p-6">
+      <div className="flex flex-col sm:flex-row items-center justify-between mb-8 gap-4">
+        <div className="text-xs font-mono text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+            <span>Card {currentIndex + 1} / {cards.length}</span>
+            <span className="mx-3">|</span>
             <span>Score: {score}</span>
         </div>
 
         {hasOptions && (
-            <div className="flex bg-gray-200 dark:bg-slate-800 p-1 rounded-lg">
+            <div className="flex bg-zinc-100 dark:bg-zinc-900 p-1 rounded-lg border border-zinc-200 dark:border-zinc-800">
                 <button
                     onClick={() => setMode('classic')}
                     disabled={isTransitioning}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${mode === 'classic' ? 'bg-white dark:bg-slate-600 shadow text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${mode === 'classic' ? 'bg-white dark:bg-zinc-800 shadow-sm text-zinc-900 dark:text-white' : 'text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
                 >
-                    <Keyboard className="w-4 h-4" /> Classic
+                    <Keyboard className="w-3 h-3" /> Classic
                 </button>
                 <button
                     onClick={() => setMode('choice')}
                     disabled={isTransitioning}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${mode === 'choice' ? 'bg-white dark:bg-slate-600 shadow text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${mode === 'choice' ? 'bg-white dark:bg-zinc-800 shadow-sm text-zinc-900 dark:text-white' : 'text-zinc-400 dark:text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
                 >
-                    <LayoutGrid className="w-4 h-4" /> Multiple Choice
+                    <LayoutGrid className="w-3 h-3" /> Quiz
                 </button>
             </div>
         )}
       </div>
 
-      <div className="w-full bg-white dark:bg-gray-700 rounded-full h-2 mb-8">
+      <div className="w-full bg-zinc-200 dark:bg-zinc-800 h-1 mb-8">
         <div 
-          className="bg-primary-500 h-2 rounded-full transition-all duration-500"
+          className="bg-zinc-900 dark:bg-white h-1 transition-all duration-500"
           style={{ width: `${((currentIndex) / cards.length) * 100}%` }}
         ></div>
       </div>
 
-      {/* Card Container */}
       <div className="relative flex-1 min-h-[500px] perspective-1000 mb-8">
         <div 
-          className={`relative w-full h-full transition-transform duration-700 preserve-3d shadow-xl rounded-2xl ${isFlipped ? 'rotate-y-180' : ''}`}
+          className={`relative w-full h-full transition-transform duration-700 preserve-3d ${isFlipped ? 'rotate-y-180' : ''}`}
         >
           {/* Front */}
-          <div className="absolute w-full h-full backface-hidden bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-2xl p-6 sm:p-8 flex flex-col transition-colors">
+          <div className="absolute w-full h-full backface-hidden bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-8 flex flex-col transition-colors shadow-sm">
             <div className="flex-none mb-4">
-              <span className="text-xs font-bold tracking-wider text-gray-400 dark:text-gray-500 uppercase">Question</span>
+              <span className="text-[10px] font-bold tracking-widest text-zinc-400 dark:text-zinc-600 uppercase border border-zinc-200 dark:border-zinc-800 px-2 py-1 rounded">Question</span>
             </div>
             
             <div className="flex-1 flex items-center justify-center overflow-y-auto custom-scrollbar my-4">
-               <h3 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 leading-relaxed text-center">{currentCard.question}</h3>
+               <h3 className="text-3xl font-serif font-medium text-zinc-900 dark:text-zinc-100 leading-relaxed text-center">{currentCard.question}</h3>
             </div>
             
-            {/* Input Area / Options Area */}
             <div className="flex-none w-full max-w-lg mx-auto mt-auto">
-               
                {mode === 'classic' ? (
-                   /* CLASSIC MODE */
                    <>
                        <div className="relative">
                          <textarea
@@ -194,44 +176,42 @@ const FlashcardRunner: React.FC<FlashcardRunnerProps> = ({ cards }) => {
                               checkAnswer();
                             }
                           }}
-                          placeholder="Type your answer here..."
+                          placeholder="Type your answer..."
                           disabled={feedback === 'correct' || isTransitioning}
                           rows={3}
-                          className={`w-full p-4 pr-14 rounded-xl border-2 outline-none transition-all resize-none placeholder-gray-400 ${
-                            feedback === 'correct' ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 
-                            feedback === 'wrong' ? 'border-red-300 bg-red-50 dark:bg-red-900/20' : 
-                            'bg-white dark:bg-slate-900 text-gray-800 dark:text-white border-gray-200 dark:border-slate-700 focus:border-primary-500 focus:ring-4 focus:ring-primary-500/20'
+                          className={`w-full p-4 pr-14 rounded-lg border outline-none transition-all resize-none placeholder-zinc-400 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white focus:ring-1 focus:ring-zinc-900 dark:focus:ring-zinc-100 ${
+                            feedback === 'correct' ? 'border-green-500' : 
+                            feedback === 'wrong' ? 'border-red-500' : 
+                            'border-zinc-200 dark:border-zinc-700'
                           }`}
                         />
                         <button 
                           onClick={() => checkAnswer()}
                           disabled={!userAnswer.trim() || feedback !== 'idle' || isTransitioning}
-                          className="absolute right-3 bottom-3 p-2 flex items-center justify-center bg-gray-700 hover:bg-gray-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors"
-                          title="Submit Answer"
+                          className="absolute right-3 bottom-3 p-2 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-200 rounded-md disabled:opacity-50 disabled:cursor-not-allowed text-white dark:text-zinc-900 transition-colors"
                         >
-                          <ChevronRight className="w-5 h-5" />
+                          <ChevronRight className="w-4 h-4" />
                         </button>
                        </div>
                    </>
                ) : (
-                   /* MULTIPLE CHOICE MODE */
                    <div className="grid grid-cols-1 gap-3">
                        {shuffledOptions.map((option, idx) => (
                            <button
                                key={idx}
                                onClick={() => checkAnswer(option)}
                                disabled={feedback !== 'idle' || isTransitioning}
-                               className={`w-full p-4 text-left rounded-xl border-2 transition-all font-medium text-sm sm:text-base ${
+                               className={`w-full p-4 text-left rounded-lg border transition-all font-medium text-sm ${
                                    feedback === 'correct' && normalize(option) === normalize(currentCard.answer)
-                                       ? 'border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
+                                       ? 'border-green-500 bg-green-50 dark:bg-green-900/10 text-green-700 dark:text-green-400'
                                        : feedback === 'wrong' && normalize(option) === normalize(userAnswer)
-                                       ? 'border-red-300 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'
-                                       : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 hover:border-primary-400 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200'
+                                       ? 'border-red-500 bg-red-50 dark:bg-red-900/10 text-red-700 dark:text-red-400'
+                                       : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600 text-zinc-700 dark:text-zinc-200'
                                }`}
                            >
-                               <div className="flex items-center gap-3">
-                                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs border ${
-                                       feedback === 'correct' && normalize(option) === normalize(currentCard.answer) ? 'border-green-500 text-green-700 dark:text-green-400' : 'border-gray-300 dark:border-slate-600 text-gray-400'
+                               <div className="flex items-center gap-4">
+                                   <div className={`w-6 h-6 rounded flex items-center justify-center text-[10px] font-mono border ${
+                                       feedback === 'correct' && normalize(option) === normalize(currentCard.answer) ? 'border-green-500 text-green-700 dark:text-green-400' : 'border-zinc-200 dark:border-zinc-700 text-zinc-400'
                                    }`}>
                                        {String.fromCharCode(65 + idx)}
                                    </div>
@@ -243,8 +223,8 @@ const FlashcardRunner: React.FC<FlashcardRunnerProps> = ({ cards }) => {
                )}
 
                {feedback === 'correct' && (
-                 <div className="mt-2 text-green-600 dark:text-green-400 font-medium flex items-center justify-center gap-1 animate-in slide-in-from-bottom-2 h-6">
-                   <Check className="w-4 h-4" /> Correct! Next card coming...
+                 <div className="mt-4 text-green-600 dark:text-green-400 font-mono text-xs uppercase tracking-widest text-center animate-in slide-in-from-bottom-2">
+                   Correct
                  </div>
                )}
                {feedback !== 'correct' && <div className="h-8"></div>}
@@ -252,10 +232,10 @@ const FlashcardRunner: React.FC<FlashcardRunnerProps> = ({ cards }) => {
           </div>
 
           {/* Back */}
-          <div className="absolute w-full h-full backface-hidden rotate-y-180 bg-white dark:bg-slate-900 text-gray-800 dark:text-white rounded-2xl p-8 flex flex-col items-center justify-center text-center border border-gray-200 dark:border-slate-700">
-            <span className="absolute top-6 left-6 text-xs font-bold tracking-wider text-gray-400 dark:text-slate-400 uppercase">Correct Answer</span>
+          <div className="absolute w-full h-full backface-hidden rotate-y-180 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white rounded-xl p-8 flex flex-col items-center justify-center text-center border border-zinc-200 dark:border-zinc-800">
+            <span className="absolute top-6 left-6 text-[10px] font-bold tracking-widest text-zinc-500 uppercase">Answer</span>
             <div className="flex-1 flex items-center justify-center w-full overflow-y-auto custom-scrollbar p-2">
-              <p className="text-xl font-medium leading-relaxed">{currentCard.answer}</p>
+              <p className="text-2xl font-serif leading-relaxed">{currentCard.answer}</p>
             </div>
             
             <div className="flex-none mt-8 flex gap-4">
@@ -265,16 +245,16 @@ const FlashcardRunner: React.FC<FlashcardRunnerProps> = ({ cards }) => {
                   setFeedback('idle');
                 }}
                 disabled={isTransitioning}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-lg text-sm font-medium transition-colors text-gray-700 dark:text-white"
+                className="px-6 py-2 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-md text-sm font-medium transition-colors text-zinc-900 dark:text-white"
               >
-                <RotateCw className="w-4 h-4" /> Try Again
+                Try Again
               </button>
               <button 
                 onClick={handleNext}
                 disabled={isTransitioning}
-                className="flex items-center gap-2 px-6 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-gray-100 text-white dark:text-slate-900 rounded-lg text-sm font-bold transition-colors disabled:opacity-50"
+                className="flex items-center gap-2 px-6 py-2 bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-200 text-white dark:text-zinc-900 rounded-md text-sm font-bold transition-colors"
               >
-                Next Card <ChevronRight className="w-4 h-4" />
+                Next <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>

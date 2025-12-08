@@ -193,7 +193,7 @@ const App: React.FC = () => {
         scale: 2,
         useCORS: true,
         logging: false,
-        backgroundColor: isDarkMode ? '#1e293b' : '#fef9c3',
+        backgroundColor: isDarkMode ? '#18181b' : '#ffffff', // Matched to new white notebook theme
         scrollY: -window.scrollY,
         windowHeight: element.scrollHeight + 100,
         onclone: (clonedDoc) => {
@@ -256,7 +256,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen bg-slate-300 dark:bg-slate-950 transition-colors duration-500 overflow-hidden">
+    <div className="flex h-screen bg-zinc-50 dark:bg-zinc-950 transition-colors duration-500 overflow-hidden font-sans">
       {/* Tooltip Menu for Text Selection */}
       {selectionMenu && (
         <TooltipMenu 
@@ -268,7 +268,7 @@ const App: React.FC = () => {
 
       {/* Sidebar - Desktop */}
       <Sidebar 
-        className="hidden md:flex w-64 border-r border-slate-800 z-20 shadow-xl"
+        className="hidden md:flex w-64 z-20"
         session={session}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -301,7 +301,7 @@ const App: React.FC = () => {
         <div className="flex-1 overflow-hidden relative flex">
           
           {/* Main View */}
-          <div className="flex-1 overflow-y-auto relative scroll-smooth bg-slate-300 dark:bg-slate-950 transition-colors duration-500">
+          <div className="flex-1 overflow-y-auto relative scroll-smooth bg-zinc-50 dark:bg-zinc-950 transition-colors duration-500 light-scrollbar">
             {activeTab === TabView.SUMMARY && session ? (
               <Notebook 
                 ref={summaryRef}
@@ -311,7 +311,7 @@ const App: React.FC = () => {
                 onTextSelection={setSelectionMenu}
               />
             ) : session ? (
-              <div className="h-full p-4 md:p-8 bg-slate-300 dark:bg-slate-950">
+              <div className="h-full bg-zinc-50 dark:bg-zinc-950">
                 <FlashcardRunner cards={session.flashcards} />
               </div>
             ) : null}
@@ -321,18 +321,18 @@ const App: React.FC = () => {
           {activeTab === TabView.SUMMARY && (
              <div 
                className={`
-                 fixed inset-y-0 right-0 w-full sm:w-96 bg-white dark:bg-slate-900 shadow-2xl transform transition-transform duration-300 ease-in-out z-30 border-l border-gray-200 dark:border-slate-800
+                 fixed inset-y-0 right-0 w-full sm:w-96 bg-white dark:bg-zinc-900 shadow-2xl transform transition-transform duration-300 ease-in-out z-30 border-l border-zinc-200 dark:border-zinc-800
                  ${isChatOpen ? 'translate-x-0' : 'translate-x-full'}
                  md:relative md:translate-x-0 md:w-96 md:flex-none
                `}
              >
                 <div className="h-full flex flex-col">
-                   <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-slate-800 md:hidden">
-                      <h3 className="font-bold text-gray-700 dark:text-white flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-primary-500" /> AI Assistant
+                   <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-800 md:hidden">
+                      <h3 className="font-bold text-zinc-700 dark:text-white flex items-center gap-2">
+                        <Sparkles className="w-4 h-4" /> AI Assistant
                       </h3>
-                      <button onClick={() => setIsChatOpen(false)} className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full">
-                         <XIcon className="w-5 h-5 text-gray-500" />
+                      <button onClick={() => setIsChatOpen(false)} className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full">
+                         <XIcon className="w-5 h-5 text-zinc-500" />
                       </button>
                    </div>
                    
@@ -359,9 +359,9 @@ const App: React.FC = () => {
           {activeTab === TabView.SUMMARY && !isChatOpen && (
              <button
                onClick={() => setIsChatOpen(true)}
-               className="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-primary-600 text-white rounded-full shadow-lg flex items-center justify-center hover:bg-primary-700 hover:scale-105 transition-all z-40"
+               className="md:hidden fixed bottom-6 right-6 w-12 h-12 bg-zinc-900 text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-all z-40"
              >
-                <MessageSquare className="w-6 h-6" />
+                <MessageSquare className="w-5 h-5" />
              </button>
           )}
 
@@ -371,7 +371,7 @@ const App: React.FC = () => {
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 md:hidden" onClick={() => setMobileMenuOpen(false)}>
-          <div className="absolute left-0 top-0 bottom-0 w-64 bg-slate-900 text-white shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="absolute left-0 top-0 bottom-0 w-64 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-xl" onClick={e => e.stopPropagation()}>
              <Sidebar 
                 session={session}
                 activeTab={activeTab}
