@@ -37,7 +37,7 @@ const UploadView: React.FC<UploadViewProps> = ({
           </div>
         </div>
         
-        <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-primary-600 to-purple-600 dark:from-primary-400 dark:to-purple-400 mb-4">
+        <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-primary-600 to-purple-600 dark:from-primary-400 dark:to-purple-400 mb-4 pb-2">
           Study Baddie
         </h1>
         <p className="text-gray-600 dark:text-gray-300 text-lg mb-10 leading-relaxed">
