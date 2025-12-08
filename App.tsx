@@ -27,12 +27,8 @@ const App: React.FC = () => {
   const summaryRef = useRef<HTMLDivElement>(null);
   const chatBotRef = useRef<ChatBotHandle>(null);
   
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    return false;
-  });
+  // Default to Light Mode (false)
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   useEffect(() => {
     if (isDarkMode) {
