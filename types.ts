@@ -32,3 +32,13 @@ export enum TabView {
   SUMMARY = 'SUMMARY',
   FLASHCARDS = 'FLASHCARDS',
 }
+
+export type SummaryLength = 'Short' | 'Medium' | 'Long';
+export type SummaryFocus = 'Overview' | 'Exam-prep' | 'Definitions & Concepts' | 'Deep-dive';
+export type SummaryTone = 'Concise' | 'Explanatory' | 'Step-by-step';
+
+export interface RegenerateOptions {
+  length: SummaryLength;
+  focus: SummaryFocus;
+  tone: SummaryTone;
+}

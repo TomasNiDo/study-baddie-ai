@@ -19,9 +19,9 @@ const Notebook = forwardRef<HTMLDivElement, NotebookProps>(({
 
   // Memoize markdown components to prevent re-renders breaking text selection
   const markdownComponents = useMemo(() => ({
-    h1: ({node, ...props}: any) => <h1 className="font-serif text-3xl font-bold text-zinc-900 dark:text-zinc-100 mb-8 mt-8 leading-[4rem]" {...props} />,
-    h2: ({node, ...props}: any) => <h2 className="font-serif text-2xl font-bold text-zinc-800 dark:text-zinc-200 mb-8 mt-8 leading-[4rem]" {...props} />,
-    h3: ({node, ...props}: any) => <h3 className="font-serif text-xl font-bold text-zinc-800 dark:text-zinc-200 mb-8 mt-8 leading-[2rem]" {...props} />,
+    h1: ({node, ...props}: any) => <h1 className="font-serif text-3xl font-bold text-zinc-900 dark:text-zinc-100 mb-6 mt-8 leading-tight" {...props} />,
+    h2: ({node, ...props}: any) => <h2 className="font-serif text-2xl font-bold text-zinc-800 dark:text-zinc-200 mb-6 mt-8 leading-snug" {...props} />,
+    h3: ({node, ...props}: any) => <h3 className="font-serif text-xl font-bold text-zinc-800 dark:text-zinc-200 mb-4 mt-6 leading-normal" {...props} />,
     p: ({node, ...props}: any) => <p className="mb-8 leading-[2rem] text-zinc-700 dark:text-zinc-300" {...props} />,
     ul: ({node, ...props}: any) => <ul className="list-disc pl-6 mb-8 space-y-0 text-zinc-700 dark:text-zinc-300" {...props} />,
     ol: ({node, ...props}: any) => <ol className="list-decimal pl-6 mb-8 space-y-0 text-zinc-700 dark:text-zinc-300" {...props} />,

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Menu, BookOpen, Layout, RefreshCw, Loader2, Download, FileIcon, Image as ImageIcon, Sun, Moon } from 'lucide-react';
-import { TabView } from '../types';
+import { TabView, RegenerateOptions } from '../types';
+import RegenerateModal from './RegenerateModal';
 
 interface HeaderProps {
   activeTab: TabView;
@@ -9,7 +10,7 @@ interface HeaderProps {
   mobileMenuOpen: boolean;
   setMobileMenuOpen: (open: boolean) => void;
   isRegenerating: boolean;
-  onRegenerate: () => void;
+  onRegenerate: (options: RegenerateOptions) => void;
   isExporting: boolean;
   onExport: (type: 'pdf' | 'png') => void;
 }
@@ -26,9 +27,19 @@ const Header: React.FC<HeaderProps> = ({
   onExport
 }) => {
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [isRegenerateModalOpen, setIsRegenerateModalOpen] = useState(false);
 
   return (
     <header className="h-16 bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between px-4 sm:px-6 flex-none z-40">
+      <RegenerateModal 
+        isOpen={isRegenerateModalOpen}
+        onClose={() => setIsRegenerateModalOpen(false)}
+        onConfirm={(options) => {
+          setIsRegenerateModalOpen(false);
+          onRegenerate(options);
+        }}
+      />
+
       <div className="flex items-center gap-4">
         <button 
           className="md:hidden p-2 -ml-2 text-zinc-600 dark:text-zinc-300"
@@ -49,12 +60,12 @@ const Header: React.FC<HeaderProps> = ({
          {activeTab === TabView.SUMMARY && (
            <>
              <button
-               onClick={onRegenerate}
+               onClick={() => setIsRegenerateModalOpen(true)}
                disabled={isRegenerating}
                className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 rounded-md text-xs font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors disabled:opacity-50 border border-zinc-200 dark:border-zinc-800"
              >
                <RefreshCw className={`w-3.5 h-3.5 ${isRegenerating ? 'animate-spin' : ''}`} />
-               {isRegenerating ? 'Regenerating...' : 'Regenerate'}
+               {isRegenerating ? 'Regenerating...' : 'Regenerate note'}
              </button>
 
              <div className="relative">

@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { Flashcard } from '../types';
+import { Flashcard, RegenerateOptions } from '../types';
 
 // Initialize the client
 const getAiClient = () => {
@@ -105,14 +105,29 @@ export const generateSummaryAndFlashcards = async (
 
 export const regenerateSummary = async (
   base64Data: string,
-  mimeType: string
+  mimeType: string,
+  options: RegenerateOptions
 ): Promise<string> => {
   const ai = getAiClient();
+  
   const prompt = `
-    Analyze the attached document/image again.
-    Provide a comprehensive, well-structured markdown summary of the key concepts.
-    Focus on clarity and educational value.
-    Ensure the summary is detailed, complete, and does not stop abruptly.
+    Analyze the attached document/image again and generate a new summary based on these settings:
+    
+    - Length: ${options.length}
+    - Focus: ${options.focus}
+    - Tone: ${options.tone}
+
+    Guidelines:
+    - If Focus is 'Overview': Provide a high-level summary of the main points.
+    - If Focus is 'Exam-prep': Highlight key facts, dates, formulas, and potential exam questions.
+    - If Focus is 'Definitions & Concepts': Focus on defining terms and explaining core concepts clearly.
+    - If Focus is 'Deep-dive': Go into detail, explaining nuances and connections between topics.
+    
+    - If Tone is 'Concise': Use bullet points and short sentences.
+    - If Tone is 'Explanatory': Use full paragraphs and connecting ideas.
+    - If Tone is 'Step-by-step': Break down processes logically.
+
+    Ensure the summary is well-structured in Markdown.
   `;
   
   const responseSchema = {
@@ -174,13 +189,6 @@ export const chatWithDocument = async (
   // Construct the chat history for the API
   // We need to inject the document into the FIRST user message effectively.
   
-  const contents = [];
-  
-  // Add the document to the first message or as context
-  // To keep it simple and robust, we will just send the document as part of the current turn's context if the history is short, 
-  // or rely on the model's ability to handle the document if we start a chat session.
-  
-  // Let's use the chat API properly.
   const chat = ai.chats.create({
     model: "gemini-2.5-flash",
     config: {

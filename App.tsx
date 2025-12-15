@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Sparkles, X as XIcon } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
-import { AppView, TabView, StudySession } from './types';
+import { AppView, TabView, StudySession, RegenerateOptions } from './types';
 import { generateSummaryAndFlashcards, regenerateSummary } from './services/geminiService';
 import FlashcardRunner from './components/FlashcardRunner';
 import ChatBot, { ChatBotHandle } from './components/ChatBot';
@@ -164,11 +164,11 @@ const App: React.FC = () => {
     }
   };
 
-  const handleRegenerateSummary = async () => {
+  const handleRegenerateSummary = async (options: RegenerateOptions) => {
     if (!session) return;
     setIsRegenerating(true);
     try {
-      const newSummary = await regenerateSummary(session.fileData, session.fileType);
+      const newSummary = await regenerateSummary(session.fileData, session.fileType, options);
       setSession(prev => prev ? { ...prev, summary: newSummary } : null);
     } catch (error) {
       console.error("Failed to regenerate summary", error);
