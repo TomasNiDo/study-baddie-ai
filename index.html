@@ -94,6 +94,58 @@
       .dark .custom-scrollbar::-webkit-scrollbar-thumb:hover {
           background-color: #3f3f46; /* zinc-700 */
       }
+
+      /* Print Styles for PDF Export */
+      @media print {
+        @page {
+          margin: 0;
+          size: auto;
+        }
+        
+        /* Reset all layout constraints */
+        html, body, #root, main, .overflow-y-auto, .h-screen, .flex, .flex-1 {
+          height: auto !important;
+          min-height: 0 !important;
+          overflow: visible !important;
+          display: block !important;
+          position: static !important;
+        }
+
+        body {
+          background-color: white !important;
+          color: black !important;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+        }
+        
+        /* Hide UI elements */
+        header, aside, .no-print, .fixed {
+          display: none !important;
+        }
+
+        /* Ensure pages break correctly */
+        .print-page {
+          break-after: page;
+          page-break-after: always;
+          box-shadow: none !important;
+          border: none !important;
+          margin: 0 !important;
+          width: 100% !important;
+          max-width: none !important;
+          height: auto !important;
+          min-height: 0 !important;
+          overflow: visible !important;
+          background-color: white !important;
+          color: black !important;
+          display: block !important;
+        }
+        
+        /* Force text colors to black for printing even if in dark mode */
+        .print-page * {
+           color: black !important;
+           border-color: #e5e7eb !important;
+        }
+      }
     </style>
   <script type="importmap">
 {

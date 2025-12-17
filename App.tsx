@@ -83,34 +83,21 @@ const App: React.FC = () => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    console.log(`[Upload] Starting upload for file: "${file.name}" | Type: ${file.type} | Size: ${file.size} bytes`);
-
-    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
-    if (!validTypes.includes(file.type)) {
-      setError("Please upload a valid Image (JPEG, PNG) or PDF.");
-      return;
-    }
-
     setIsProcessing(true);
     setError(null);
 
     try {
       const reader = new FileReader();
-
       reader.onerror = () => {
         setError("Failed to read the file. Please try again.");
         setIsProcessing(false);
       };
-
       reader.onloadend = async () => {
         if (reader.error) return;
-
         const base64String = reader.result as string;
         const base64Data = base64String.split(',')[1];
-
         try {
           const { summary, flashcards, title } = await generateSummaryAndFlashcards(base64Data, file.type);
-
           const newSession: StudySession = {
             id: Date.now().toString(),
             fileName: file.name,
@@ -122,44 +109,17 @@ const App: React.FC = () => {
             chatHistory: [],
             createdAt: Date.now(),
           };
-
           setSession(newSession);
           setView(AppView.DASHBOARD);
         } catch (err: any) {
-          let finalMessage = "An unexpected error occurred.";
-          if (err.message) {
-            try {
-               const rawMsg = err.message;
-               const jsonMatch = rawMsg.match(/\{.*\}/s);
-               if (jsonMatch) {
-                 const errorObj = JSON.parse(jsonMatch[0]);
-                 if (errorObj.error) {
-                    const status = errorObj.error.status;
-                    const reason = errorObj.error.details?.[0]?.reason;
-                    if (reason === 'API_KEY_INVALID') {
-                       finalMessage = "Authentication Error: The provided API Key is invalid. Please check your configuration.";
-                    } else if (status === 'RESOURCE_EXHAUSTED') {
-                       finalMessage = "Service Busy: Too many requests. Please wait a moment and try again.";
-                    } else if (errorObj.error.message) {
-                       finalMessage = `AI Service Error: ${errorObj.error.message}`;
-                    }
-                 }
-               } else {
-                 finalMessage = rawMsg;
-               }
-            } catch (e) {
-               finalMessage = err.message;
-            }
-          }
-          setError(finalMessage);
+          setError(err.message || "An error occurred.");
         } finally {
           setIsProcessing(false);
         }
       };
-
       reader.readAsDataURL(file);
     } catch (err) {
-      setError("An unexpected error occurred while processing the file.");
+      setError("An error occurred.");
       setIsProcessing(false);
     }
   };
@@ -178,59 +138,65 @@ const App: React.FC = () => {
   };
 
   const handleExport = async (type: 'png' | 'pdf') => {
-    if (!summaryRef.current) return;
     setIsExporting(true);
 
     try {
-      await document.fonts.ready;
-      const element = summaryRef.current;
+      if (!summaryRef.current) {
+          console.error("Reference not found");
+          return;
+      }
       
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: isDarkMode ? '#18181b' : '#ffffff', // Matched to new white notebook theme
-        scrollY: -window.scrollY,
-        windowHeight: element.scrollHeight + 100,
-        onclone: (clonedDoc) => {
-            const clonedElement = clonedDoc.getElementById('summary-content');
-            if (clonedElement) {
-                clonedElement.style.height = 'auto';
-                clonedElement.style.overflow = 'visible';
-                clonedElement.style.maxHeight = 'none';
-            }
-        }
-      });
+      await document.fonts.ready;
+      
+      const PAGE_WIDTH = 816; 
+      const PAGE_HEIGHT = 1056; 
+      
+      if (type === 'pdf') {
+        const doc = new jsPDF({
+          orientation: 'portrait',
+          unit: 'px',
+          format: [PAGE_WIDTH, PAGE_HEIGHT],
+          hotfixes: ["px_scaling"]
+        });
+        
+        const pages = summaryRef.current.querySelectorAll('.print-page');
+        if (pages.length === 0) throw new Error("No pages found to export");
 
-      if (type === 'png') {
+        for (let i = 0; i < pages.length; i++) {
+          const page = pages[i] as HTMLElement;
+          if (i > 0) doc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+          
+          const canvas = await html2canvas(page, {
+            scale: 3, // Increased scale for better precision in PDF highlights
+            useCORS: true,
+            logging: false,
+            backgroundColor: isDarkMode ? '#18181b' : '#ffffff',
+            width: PAGE_WIDTH,
+            height: PAGE_HEIGHT,
+            x: 0,
+            y: 0
+          });
+          
+          const imgData = canvas.toDataURL('image/png');
+          doc.addImage(imgData, 'PNG', 0, 0, PAGE_WIDTH, PAGE_HEIGHT, undefined, 'FAST');
+        }
+        
+        doc.save(`${session?.title || 'StudyNotes'}.pdf`);
+
+      } else {
+        const element = summaryRef.current;
+        const canvas = await html2canvas(element, {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          backgroundColor: isDarkMode ? '#18181b' : '#fafafa', 
+          ignoreElements: (el) => el.classList.contains('no-print')
+        });
+
         const link = document.createElement('a');
         link.download = `StudyBaddie-Notes-${Date.now()}.png`;
         link.href = canvas.toDataURL('image/png');
         link.click();
-      } else {
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        const imgWidth = canvas.width;
-        const imgHeight = canvas.height;
-        const ratio = pdfWidth / imgWidth;
-        const canvasHeightInPdf = imgHeight * ratio;
-        
-        let position = 0;
-        let heightLeft = canvasHeightInPdf;
-
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, canvasHeightInPdf);
-        heightLeft -= pdfHeight;
-
-        while (heightLeft > 0) {
-            position -= pdfHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, canvasHeightInPdf);
-            heightLeft -= pdfHeight;
-        }
-        
-        pdf.save(`StudyBaddie-Notes-${Date.now()}.pdf`);
       }
     } catch (err) {
       console.error("Export failed:", err);
@@ -253,7 +219,6 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-zinc-50 dark:bg-zinc-950 transition-colors duration-500 overflow-hidden font-sans">
-      {/* Tooltip Menu for Text Selection */}
       {selectionMenu && (
         <TooltipMenu 
           x={selectionMenu.x}
@@ -262,9 +227,8 @@ const App: React.FC = () => {
         />
       )}
 
-      {/* Sidebar - Desktop */}
       <Sidebar 
-        className="hidden md:flex w-64 z-20"
+        className="hidden md:flex w-64 z-20 no-print"
         session={session}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -278,25 +242,22 @@ const App: React.FC = () => {
         }}
       />
 
-      {/* Main Content */}
       <main className="flex-1 flex flex-col h-full relative overflow-hidden">
-        
-        <Header 
-          activeTab={activeTab}
-          isDarkMode={isDarkMode}
-          toggleDarkMode={toggleDarkMode}
-          mobileMenuOpen={mobileMenuOpen}
-          setMobileMenuOpen={setMobileMenuOpen}
-          isRegenerating={isRegenerating}
-          onRegenerate={handleRegenerateSummary}
-          isExporting={isExporting}
-          onExport={handleExport}
-        />
+        <div className="no-print">
+          <Header 
+            activeTab={activeTab}
+            isDarkMode={isDarkMode}
+            toggleDarkMode={toggleDarkMode}
+            mobileMenuOpen={mobileMenuOpen}
+            setMobileMenuOpen={setMobileMenuOpen}
+            isRegenerating={isRegenerating}
+            onRegenerate={handleRegenerateSummary}
+            isExporting={isExporting}
+            onExport={handleExport}
+          />
+        </div>
 
-        {/* Content Area */}
         <div className="flex-1 overflow-hidden relative flex">
-          
-          {/* Main View */}
           <div className="flex-1 overflow-y-auto relative scroll-smooth bg-zinc-50 dark:bg-zinc-950 transition-colors duration-500 light-scrollbar">
             {activeTab === TabView.SUMMARY && session ? (
               <Notebook 
@@ -313,11 +274,10 @@ const App: React.FC = () => {
             ) : null}
           </div>
 
-          {/* Right Sidebar - Chat Assistant */}
           {activeTab === TabView.SUMMARY && (
              <div 
                className={`
-                 fixed inset-y-0 right-0 w-full sm:w-96 bg-white dark:bg-zinc-900 shadow-2xl transform transition-transform duration-300 ease-in-out z-30 border-l border-zinc-200 dark:border-zinc-800
+                 fixed inset-y-0 right-0 w-full sm:w-96 bg-white dark:bg-zinc-900 shadow-2xl transform transition-transform duration-300 ease-in-out z-30 border-l border-zinc-200 dark:border-zinc-800 no-print
                  ${isChatOpen ? 'translate-x-0' : 'translate-x-full'}
                  md:relative md:translate-x-0 md:w-96 md:flex-none
                `}
@@ -351,11 +311,10 @@ const App: React.FC = () => {
              </div>
           )}
 
-          {/* Mobile Chat Toggle Button */}
           {activeTab === TabView.SUMMARY && !isChatOpen && (
              <button
                onClick={() => setIsChatOpen(true)}
-               className="md:hidden fixed bottom-6 right-6 w-12 h-12 bg-zinc-900 text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-all z-40"
+               className="md:hidden fixed bottom-6 right-6 w-12 h-12 bg-zinc-900 text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-all z-40 no-print"
              >
                 <MessageSquare className="w-5 h-5" />
              </button>
@@ -364,9 +323,8 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 md:hidden" onClick={() => setMobileMenuOpen(false)}>
+        <div className="fixed inset-0 z-50 bg-black/50 md:hidden no-print" onClick={() => setMobileMenuOpen(false)}>
           <div className="absolute left-0 top-0 bottom-0 w-64 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white shadow-xl" onClick={e => e.stopPropagation()}>
              <Sidebar 
                 session={session}
