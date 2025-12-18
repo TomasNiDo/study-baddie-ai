@@ -60,6 +60,7 @@ export const generateSummaryAndFlashcards = async (
   };
 
   try {
+    // Using Gemini 2.5 Flash as requested
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: {
@@ -76,7 +77,7 @@ export const generateSummaryAndFlashcards = async (
       config: {
         responseMimeType: "application/json",
         responseSchema: responseSchema,
-        systemInstruction: "You are an expert tutor helper. Your goal is to create high-quality study materials.",
+        systemInstruction: "You are an expert university tutor. Your goal is to create high-quality, academic-grade study materials. Prioritize accuracy, depth, and clear structure.",
         maxOutputTokens: 8192,
       },
     });
@@ -142,6 +143,7 @@ export const regenerateSummary = async (
   };
 
   try {
+      // Using Gemini 2.5 Flash as requested
       const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: {
@@ -158,7 +160,7 @@ export const regenerateSummary = async (
       config: {
         responseMimeType: "application/json",
         responseSchema: responseSchema,
-        systemInstruction: "You are an expert tutor helper.",
+        systemInstruction: "You are an expert university tutor.",
         maxOutputTokens: 8192,
       },
     });
@@ -182,26 +184,15 @@ export const chatWithDocument = async (
 ) => {
   const ai = getAiClient();
   
-  // For simplicity in this demo, we are sending the doc context with every message or starting a fresh chat with context.
-  // A more advanced version would cache the context. 
-  // Here, we'll use generateContent with the history + new message + doc for stateless simplicity or construct a proper chat history.
-  
-  // Construct the chat history for the API
-  // We need to inject the document into the FIRST user message effectively.
-  
+  // Using Gemini 2.5 Flash as requested
   const chat = ai.chats.create({
     model: "gemini-2.5-flash",
     config: {
-      // Robust system instruction to prevent persona drift (e.g. staying in "child mode" after an ELI5 prompt)
+      // Robust system instruction to prevent persona drift
       systemInstruction: "You are an intelligent study assistant for university students. You explain concepts clearly and accurately. When asked to simplify, use simple analogies but do not adopt a childish persona. Always return to a professional, academic tone for subsequent questions unless explicitly asked otherwise.",
     },
   });
 
-  // Since we can't easily "upload" the file to a persistent history in the REST API without caching,
-  // we will prepend the document data to the very first message of the conversation logic.
-  // However, since we are doing a single turn request here essentially (or managing history manually),
-  // let's just use generateContent for the "chat" response to ensure the image/pdf is always in context.
-  
   const chatHistoryParts = history.map(h => ({
     role: h.role,
     parts: [{ text: h.text }]
@@ -210,9 +201,7 @@ export const chatWithDocument = async (
   // Current message with document context
   const parts: any[] = [{ text: newMessage }];
   
-  // If this is the first message or we want to ensure context, attach the file.
-  // Gemini 2.5 Flash has a large context window, so sending the base64 again is usually fine for small docs.
-  // Optimization: In a real app, use File API or Caching. Here, we send it every time to be safe and stateless.
+  // We attach the file context to the latest message to ensure the model sees it immediately
   parts.unshift({
     inlineData: {
       mimeType: mimeType,
@@ -223,7 +212,7 @@ export const chatWithDocument = async (
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
     contents: [
-       ...chatHistoryParts, // Past history (text only to save bandwidth/tokens usually, but here we just rely on the new request having the image)
+       ...chatHistoryParts, 
        { role: 'user', parts: parts }
     ]
   });
