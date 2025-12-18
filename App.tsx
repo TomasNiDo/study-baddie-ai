@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Sparkles, X as XIcon } from 'lucide-react';
+import { MessageSquare, Sparkles, X as XIcon, ChevronRight } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 import { AppView, TabView, StudySession, RegenerateOptions } from './types';
@@ -21,8 +21,9 @@ const App: React.FC = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
-  const [isChatOpen, setIsChatOpen] = useState(true);
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [selectionMenu, setSelectionMenu] = useState<{ x: number; y: number; text: string } | null>(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
   const summaryRef = useRef<HTMLDivElement>(null);
   const chatBotRef = useRef<ChatBotHandle>(null);
@@ -52,6 +53,7 @@ const App: React.FC = () => {
 
     if (!selectionMenu || !chatBotRef.current) return;
     
+    // Automatically open chat if closed
     if (!isChatOpen) setIsChatOpen(true);
 
     let prompt = "";
@@ -219,16 +221,8 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-zinc-50 dark:bg-zinc-950 transition-colors duration-500 overflow-hidden font-sans">
-      {selectionMenu && (
-        <TooltipMenu 
-          x={selectionMenu.x}
-          y={selectionMenu.y}
-          onAction={handleTooltipAction}
-        />
-      )}
-
       <Sidebar 
-        className="hidden md:flex w-64 z-20 no-print"
+        className={`hidden md:flex z-20 no-print transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'}`}
         session={session}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -238,8 +232,10 @@ const App: React.FC = () => {
            setView(AppView.UPLOAD);
            setActiveTab(TabView.SUMMARY);
            setError(null);
-           setIsChatOpen(true);
+           setIsChatOpen(false);
         }}
+        isCollapsed={isSidebarCollapsed}
+        onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
       />
 
       <main className="flex-1 flex flex-col h-full relative overflow-hidden">
@@ -275,53 +271,88 @@ const App: React.FC = () => {
           </div>
 
           {activeTab === TabView.SUMMARY && (
-             <div 
-               className={`
-                 fixed inset-y-0 right-0 w-full sm:w-96 bg-white dark:bg-zinc-900 shadow-2xl transform transition-transform duration-300 ease-in-out z-30 border-l border-zinc-200 dark:border-zinc-800 no-print
-                 ${isChatOpen ? 'translate-x-0' : 'translate-x-full'}
-                 md:relative md:translate-x-0 md:w-96 md:flex-none
-               `}
-             >
-                <div className="h-full flex flex-col">
-                   <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-800 md:hidden">
-                      <h3 className="font-bold text-zinc-700 dark:text-white flex items-center gap-2">
-                        <Sparkles className="w-4 h-4" /> AI Assistant
-                      </h3>
-                      <button onClick={() => setIsChatOpen(false)} className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full">
-                         <XIcon className="w-5 h-5 text-zinc-500" />
-                      </button>
-                   </div>
+            <>
+               {/* Chat Sidebar Overlay */}
+               <div 
+                 className={`
+                   bg-white dark:bg-zinc-900 z-30 border-l border-zinc-200 dark:border-zinc-800 no-print
+                   transition-[width,transform] duration-300 ease-in-out
                    
-                   {session && (
-                     <ChatBot 
-                       ref={chatBotRef}
-                       history={session.chatHistory} 
-                       setHistory={(newHistory) => {
-                          if (typeof newHistory === 'function') {
-                             setSession(prev => prev ? { ...prev, chatHistory: newHistory(prev.chatHistory) } : null);
-                          } else {
-                             setSession(prev => prev ? { ...prev, chatHistory: newHistory } : null);
-                          }
-                       }}
-                       fileData={session.fileData} 
-                       fileType={session.fileType}
-                     />
-                   )}
-                </div>
-             </div>
-          )}
+                   /* Mobile: Fixed overlay */
+                   fixed inset-y-0 right-0 h-full w-full
+                   ${isChatOpen ? 'translate-x-0' : 'translate-x-full pointer-events-none'}
 
-          {activeTab === TabView.SUMMARY && !isChatOpen && (
-             <button
-               onClick={() => setIsChatOpen(true)}
-               className="md:hidden fixed bottom-6 right-6 w-12 h-12 bg-zinc-900 text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 transition-all z-40 no-print"
-             >
-                <MessageSquare className="w-5 h-5" />
-             </button>
+                   /* Desktop: Relative side panel that pushes content */
+                   sm:relative sm:inset-auto sm:transform-none sm:shadow-none sm:h-full sm:pointer-events-auto
+                   ${isChatOpen ? 'sm:w-96' : 'sm:w-0 sm:border-l-0 overflow-hidden'}
+                 `}
+               >
+                  <div className="w-full sm:w-96 h-full flex flex-col">
+                     {/* Header - Visible on all screens now to provide close button */}
+                     <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-800">
+                        <h3 className="font-bold text-zinc-700 dark:text-white flex items-center gap-2">
+                          <Sparkles className="w-4 h-4" /> AI Assistant
+                        </h3>
+                        <button 
+                           onClick={() => setIsChatOpen(false)} 
+                           className="p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full transition-colors"
+                           title="Close chat"
+                        >
+                           <XIcon className="w-5 h-5 text-zinc-500" />
+                        </button>
+                     </div>
+                     
+                     {session && (
+                       <ChatBot 
+                         ref={chatBotRef}
+                         history={session.chatHistory} 
+                         setHistory={(newHistory) => {
+                            if (typeof newHistory === 'function') {
+                               setSession(prev => prev ? { ...prev, chatHistory: newHistory(prev.chatHistory) } : null);
+                            } else {
+                               setSession(prev => prev ? { ...prev, chatHistory: newHistory } : null);
+                            }
+                         }}
+                         fileData={session.fileData} 
+                         fileType={session.fileType}
+                         hideHeader={true}
+                       />
+                     )}
+                  </div>
+               </div>
+
+               {/* Floating Toggle Button */}
+               <button
+                 onClick={() => setIsChatOpen(!isChatOpen)}
+                 className={`
+                   fixed rounded-full shadow-2xl flex items-center justify-center hover:scale-105 transition-all duration-300 z-50 no-print
+                   ${isChatOpen 
+                      ? 'w-12 h-12 bottom-24 right-6 sm:bottom-6 sm:right-[26rem] bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white border border-zinc-200 dark:border-zinc-700' 
+                      : 'w-14 h-14 bottom-6 right-6 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
+                   }
+                 `}
+               >
+                  {isChatOpen ? (
+                     <ChevronRight className="w-6 h-6 sm:rotate-0 rotate-90 sm:block hidden" />
+                  ) : (
+                     <Sparkles className="w-6 h-6" />
+                  )}
+                  {isChatOpen && <XIcon className="w-5 h-5 sm:hidden" />}
+               </button>
+             </>
           )}
 
         </div>
       </main>
+
+      {/* Render Selection Menu Last to prevent DOM insertion disrupting selection */}
+      {selectionMenu && (
+        <TooltipMenu 
+          x={selectionMenu.x}
+          y={selectionMenu.y}
+          onAction={handleTooltipAction}
+        />
+      )}
 
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 md:hidden no-print" onClick={() => setMobileMenuOpen(false)}>

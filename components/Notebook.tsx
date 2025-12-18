@@ -28,17 +28,12 @@ const Notebook = forwardRef<HTMLDivElement, NotebookProps>(({
     ol: ({node, ...props}: any) => <ol className="list-decimal pl-6 mb-6 space-y-1 text-zinc-700 dark:text-zinc-300" {...props} />,
     li: ({node, ...props}: any) => <li className="leading-[2.2rem] pl-2 marker:text-zinc-400" {...props} />,
     // PDF Export Fix:
-    // Instead of applying background to the container (which html2canvas renders as one big box on wrap),
-    // we split text into individual segments (words/spaces). 
-    // This forces independent bounding boxes for each segment, ensuring the highlight flows correctly across lines in the PDF.
     strong: ({node, children, ...props}: any) => {
       const highlightColor = isDarkMode ? '#e4e4e7' : '#fef08a';
-      
       return (
         <strong className="font-bold text-zinc-950 dark:text-zinc-950" {...props}>
           {React.Children.map(children, (child) => {
             if (typeof child === 'string') {
-              // Split text by whitespace, preserving the whitespace segments
               return child.split(/(\s+)/).filter(part => part.length > 0).map((part, index) => (
                 <span
                   key={index}
@@ -55,7 +50,6 @@ const Notebook = forwardRef<HTMLDivElement, NotebookProps>(({
                 </span>
               ));
             }
-            // Fallback for non-string children (e.g., nested elements)
             return (
               <span style={{ 
                 backgroundColor: highlightColor,
@@ -74,36 +68,199 @@ const Notebook = forwardRef<HTMLDivElement, NotebookProps>(({
 
   useLayoutEffect(() => {
     if (!hiddenRenderRef.current) return;
+
+    // Helper: Split a node that is too tall into two parts [fits, overflows]
+    const splitNode = (node: HTMLElement, maxLimit: number): [HTMLElement | null, HTMLElement | null] => {
+      const clone1 = node.cloneNode(false) as HTMLElement; // Part for current page
+      const clone2 = node.cloneNode(false) as HTMLElement; // Part for next page
+
+      // Adjust margins to look seamless across pages
+      clone1.style.marginBottom = '0';
+      clone2.style.marginTop = '0';
+      // If it's an ordered list, we ideally want to update the 'start' attribute of clone2, 
+      // but simpler for now to just let it continue visually.
+
+      // We need a temp container inside the hidden renderer to measure the split parts
+      // properly inheriting styles (width, font, etc)
+      hiddenRenderRef.current?.appendChild(clone1);
+
+      const children = Array.from(node.childNodes);
+      let overflowed = false;
+
+      for (const child of children) {
+        if (overflowed) {
+          clone2.appendChild(child.cloneNode(true));
+          continue;
+        }
+
+        // Try adding the whole child
+        const childClone = child.cloneNode(true);
+        clone1.appendChild(childClone);
+
+        if (clone1.offsetHeight > maxLimit) {
+          // The child caused an overflow.
+          clone1.removeChild(childClone); // Remove it
+          
+          // Can we split this child?
+          // We split if it is a Text Node or an Element like <span>/<strong>/<p> (but usually we are splitting P or UL here)
+          
+          // Case 1: Text Node (Split by words)
+          if (child.nodeType === Node.TEXT_NODE && child.textContent) {
+             const words = child.textContent.split(/(\s+)/); // Split keeping delimiters to preserve spacing
+             let currentText = '';
+             const textNode = document.createTextNode('');
+             clone1.appendChild(textNode);
+             
+             let splitIndex = -1;
+             
+             for(let i=0; i<words.length; i++) {
+                const prevText = currentText;
+                currentText += words[i];
+                textNode.textContent = currentText;
+                
+                if (clone1.offsetHeight > maxLimit) {
+                   // Revert
+                   textNode.textContent = prevText;
+                   splitIndex = i;
+                   break;
+                }
+             }
+
+             if (splitIndex !== -1) {
+                // We found a split point
+                const remainingText = words.slice(splitIndex).join('');
+                clone2.appendChild(document.createTextNode(remainingText));
+                overflowed = true;
+             } else {
+                // Even the first word didn't fit.
+                // If clone1 is empty, we must put content in clone2 (it's just too big for the space).
+                // But usually this means we force it to next page entirely.
+                clone1.removeChild(textNode);
+                clone2.appendChild(child.cloneNode(true));
+                overflowed = true;
+             }
+          } 
+          // Case 2: Element Node (e.g. a bold span or a list item)
+          else if (child.nodeType === Node.ELEMENT_NODE) {
+             // If it's a List Item inside a UL/OL, simply move the LI to next page
+             if (node.tagName === 'UL' || node.tagName === 'OL') {
+                clone2.appendChild(child.cloneNode(true));
+                overflowed = true;
+             } else {
+                // It's a span or strong inside a paragraph. 
+                // Recursively split ONLY if it's a block-like structure or long inline.
+                // For simplicity/performance, if an inline tag (like a highlighted word) doesn't fit, 
+                // we move the whole tag to the next page.
+                clone2.appendChild(child.cloneNode(true));
+                overflowed = true;
+             }
+          } else {
+             clone2.appendChild(child.cloneNode(true));
+             overflowed = true;
+          }
+        }
+      }
+
+      // Cleanup temp measurement
+      hiddenRenderRef.current?.removeChild(clone1);
+
+      // If nothing fit in clone1, return null for it (implies whole block moves)
+      // If everything fit in clone1, return null for clone2
+      const res1 = clone1.hasChildNodes() ? clone1 : null;
+      const res2 = clone2.hasChildNodes() ? clone2 : null;
+
+      return [res1, res2];
+    };
+
     const timeout = setTimeout(() => {
       if (!hiddenRenderRef.current) return;
-      const contentNodes = Array.from(hiddenRenderRef.current.children) as HTMLElement[];
+      
+      const sourceNodes = Array.from(hiddenRenderRef.current.children) as HTMLElement[];
       const newPages: string[] = [];
       let currentPageNodes: HTMLElement[] = [];
       let currentHeight = 0;
       const MAX_PAGE_HEIGHT = 790; 
 
-      contentNodes.forEach((node) => {
-        const nodeHeight = node.offsetHeight;
+      // We process a queue so we can push split parts back onto the queue
+      const queue = [...sourceNodes];
+
+      while (queue.length > 0) {
+        const node = queue.shift();
+        if (!node) continue;
+
         const style = window.getComputedStyle(node);
         const marginTop = parseInt(style.marginTop) || 0;
         const marginBottom = parseInt(style.marginBottom) || 0;
+        const nodeHeight = node.offsetHeight;
         const totalNodeHeight = nodeHeight + marginTop + marginBottom;
 
-        if (currentHeight + totalNodeHeight > MAX_PAGE_HEIGHT && currentPageNodes.length > 0) {
-          newPages.push(currentPageNodes.map(n => n.outerHTML).join(''));
-          currentPageNodes = [node];
-          currentHeight = totalNodeHeight;
+        // Does it fit?
+        if (currentHeight + totalNodeHeight <= MAX_PAGE_HEIGHT) {
+           currentPageNodes.push(node);
+           currentHeight += totalNodeHeight;
         } else {
-          currentPageNodes.push(node);
-          currentHeight += totalNodeHeight;
-        }
-      });
+           // It doesn't fit.
+           const remainingSpace = MAX_PAGE_HEIGHT - currentHeight - marginTop; // Subtract margin of the node we are trying to add
 
+           // If remaining space is tiny (e.g. < 40px), just break page. 
+           // Otherwise, try to split.
+           // Only split P, UL, OL, BLOCKQUOTE. Don't split Headings (H1-H6) or Images.
+           const canSplit = ['P', 'UL', 'OL', 'BLOCKQUOTE', 'DIV'].includes(node.tagName) && remainingSpace > 40;
+           
+           if (canSplit) {
+              const [part1, part2] = splitNode(node, remainingSpace);
+
+              if (part1) {
+                 currentPageNodes.push(part1);
+                 // We don't update currentHeight strictly because we are about to flush
+              }
+
+              // Flush current page
+              if (currentPageNodes.length > 0) {
+                 newPages.push(currentPageNodes.map(n => n.outerHTML).join(''));
+              }
+              
+              // Reset for next page
+              currentPageNodes = [];
+              currentHeight = 0;
+
+              // If we have a remainder, put it back at start of queue
+              if (part2) {
+                 queue.unshift(part2);
+              } else if (!part1) {
+                 // If part1 was null (nothing fit) and part2 is null (everything fit? impossible here), 
+                 // or split failed completely, just force original node to next page.
+                 queue.unshift(node); 
+              }
+           } else {
+              // Cannot split or no space. Flush current page.
+              if (currentPageNodes.length > 0) {
+                 newPages.push(currentPageNodes.map(n => n.outerHTML).join(''));
+              }
+              currentPageNodes = [];
+              currentHeight = 0;
+              
+              // Process node again on new page
+              // Note: If a single node is taller than MAX_PAGE_HEIGHT (e.g. huge image), 
+              // this logic simply puts it on a page by itself and lets it overflow visually (CSS hidden)
+              // checking currentHeight === 0 avoids infinite loop
+              if (currentHeight === 0) {
+                 currentPageNodes.push(node);
+                 currentHeight += totalNodeHeight;
+              } else {
+                 queue.unshift(node);
+              }
+           }
+        }
+      }
+
+      // Flush final page
       if (currentPageNodes.length > 0) {
         newPages.push(currentPageNodes.map(n => n.outerHTML).join(''));
       }
       setPages(newPages);
-    }, 200);
+    }, 300); // Slight delay to ensure React rendering is stable
+
     return () => clearTimeout(timeout);
   }, [session.summary, markdownComponents]);
 
@@ -139,6 +296,7 @@ const Notebook = forwardRef<HTMLDivElement, NotebookProps>(({
 
   return (
     <div ref={ref} className="min-h-full p-6 md:p-12 flex flex-col items-center bg-zinc-50 dark:bg-zinc-950 gap-8">
+       {/* Hidden Render Container: Used for initial render and measurements */}
        <div 
          ref={hiddenRenderRef} 
          className="absolute top-0 left-0 invisible w-[816px] pl-28 pr-16 pointer-events-none font-hand text-lg md:text-xl"
@@ -203,4 +361,4 @@ const Notebook = forwardRef<HTMLDivElement, NotebookProps>(({
   );
 });
 
-export default Notebook;
+export default React.memo(Notebook);
